@@ -1,0 +1,217 @@
+/* ── Premium Google Fonts: Plus Jakarta Sans (headings) + Inter (body) ── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg-app: #0b1120;
+  --bg-sidebar: #070d1e;
+  --bg-header: rgba(7, 13, 30, 0.95);
+  --bg-content: #0d1526;
+  --bg-card: #131d35;
+  --bg-card-hover: #182542;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-light: rgba(255, 255, 255, 0.15);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --modal-bg: #0f172a;
+  --stat-bg: rgba(255, 255, 255, 0.03);
+}
+
+:root.light {
+  color-scheme: light;
+  --bg-app: #f1f5f9;
+  --bg-sidebar: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.98);
+  --bg-content: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --border-color: #cbd5e1;
+  --border-light: #94a3b8;
+  --text-primary: #020617;
+  --text-secondary: #1e293b;
+  --text-muted: #334155;
+  --input-bg: #ffffff;
+  --input-border: #94a3b8;
+  --modal-bg: #ffffff;
+  --stat-bg: #ffffff;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ─── LIGHT MODE: Universal text visibility overrides ─── */
+/* Only override text color if element does NOT explicitly request white text or custom inline color */
+.light h1:not(.text-white):not(.text-slate-100):not([style*="color"]),
+.light h2:not(.text-white):not(.text-slate-100):not([style*="color"]),
+.light h3:not(.text-white):not(.text-slate-100):not([style*="color"]),
+.light h4:not(.text-white):not(.text-slate-100):not([style*="color"]),
+.light h5:not(.text-white):not(.text-slate-100):not([style*="color"]),
+.light h6:not(.text-white):not(.text-slate-100):not([style*="color"]) {
+  color: #020617;
+}
+
+/* Page subtitle paragraphs — everywhere except explicitly white/light elements */
+.light p:not(.text-white):not(.text-slate-100):not(.text-slate-200):not(.text-slate-300):not([style*="color"]) {
+  color: #1e293b;
+}
+
+/* Keep white/light text on dark backgrounds (modals, headers, dark cards, buttons) */
+.light .text-white,
+.light .text-white * {
+  color: #ffffff !important;
+}
+.light .text-slate-100,
+.light .text-slate-100 * {
+  color: #f8fafc !important;
+}
+.light .text-slate-200,
+.light .text-slate-200 * {
+  color: #e2e8f0 !important;
+}
+.light .text-slate-300,
+.light .text-slate-300 * {
+  color: #cbd5e1 !important;
+}
+
+.light [class*="from-slate-9"] *,
+.light [class*="from-slate-8"] *,
+.light .bg-slate-900 h1,
+.light .bg-slate-900 h2,
+.light .bg-slate-900 h3,
+.light .bg-slate-900 p,
+.light .bg-slate-950 h1,
+.light .bg-slate-950 h2,
+.light .bg-slate-950 h3,
+.light .bg-slate-950 p {
+  color: inherit;
+}
+
+.light .bg-slate-900 .text-slate-400,
+.light .bg-slate-800 .text-slate-400,
+.light .bg-slate-950 .text-slate-400,
+.light .bg-slate-900 p.text-slate-400,
+.light .bg-slate-800 p.text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Table overrides */
+.light table th {
+  color: #020617 !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+  background-color: #f1f5f9 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+.light table td {
+  color: #0f172a !important;
+  font-size: 13.5px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Form elements */
+.light select,
+.light input,
+.light textarea {
+  color: #020617 !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 600 !important;
+}
+
+/* Fix native select dropdown option readability in all themes */
+select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+}
+
+:root.light select option,
+.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Span and div text that uses slate colors */
+.light span {
+  color: inherit;
+}
+
+input, button, select, textarea {
+  font-family: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Responsive Utilities ─────────────────────────────────────── */
+
+/* Mobile-first: small phones (≤ 480px) */
+@media (max-width: 480px) {
+  .denno-stat-grid   { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .denno-card-grid   { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .denno-hide-xs     { display: none !important; }
+  .denno-table-wrap  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Tighten banner headings */
+  h2, .denno-heading { font-size: 17px !important; }
+
+  /* Jobs / companies filter toolbar — stack vertically */
+  .denno-filter-bar  { flex-direction: column !important; }
+  .denno-filter-bar > * { width: 100% !important; min-width: 0 !important; }
+
+  /* Banner actions — stack */
+  .denno-banner-actions { flex-direction: column !important; width: 100% !important; }
+  .denno-banner-actions > button { width: 100% !important; justify-content: center !important; }
+}
+
+/* Tablets / small laptops (≤ 900px) */
+@media (max-width: 900px) {
+  .denno-stat-grid   { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+  .denno-card-grid   { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+  .denno-hide-sm     { display: none !important; }
+  .denno-table-wrap  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Full-width tables on mobile */
+  .denno-table-wrap table { min-width: 600px; }
+
+  /* Kanban columns full-width */
+  .denno-kanban      { flex-direction: column !important; }
+  .denno-kanban-col  { min-width: unset !important; width: 100% !important; }
+}
+
+/* Medium screens (901px – 1280px) */
+@media (min-width: 901px) and (max-width: 1280px) {
+  .denno-stat-grid   { grid-template-columns: repeat(3, 1fr) !important; }
+  .denno-card-grid   { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Large screens (> 1280px) */
+@media (min-width: 1281px) {
+  .denno-stat-grid   { grid-template-columns: repeat(4, 1fr) !important; }
+}
+
+/* ── Scrollable modal / table containers on all screens ── */
+.denno-table-wrap { overflow-x: auto; border-radius: 12px; }
+.denno-modal-scroll { overflow-y: auto; max-height: 85vh; }

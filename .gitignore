@@ -1,0 +1,79 @@
+# Python artifacts & bytecode
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+coverage/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment & secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# Data & Database storage
+data/
+uploads/
+backend/uploads/
+*.db
+*.sqlite
+*.sqlite3
+
+# Imported/Exported data & temporary JSON files
+*.csv
+*.xlsx
+*.xls
+*.pdf
+*.docx
+test_user.json
+import*.json
+export*.json
+scratch/
+
+# Core documentation is tracked (README.md, docs/, database/SCHEMA.md)
+
+# Test scripts & temp check files
+backend/test_*.py
+backend/check_*.py
+backend/verify_flow.py
+backend/full_verify.py
+backend/tmp_*.py
+
+# Node modules and build caches
+node_modules/
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/build/
+frontend/.cache/
+*.tsbuildinfo
+
+# Background worker & queue artifacts
+celerybeat-schedule*
+celerybeat.pid
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Log files & security reports
+*.log
+scripts/security_report.txt
