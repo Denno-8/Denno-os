@@ -153,7 +153,7 @@ sequence diagrams (auth flow, one-click apply) and deployment topology.
 # 1. Clone and configure
 git clone <this-repo>
 cd denno
-cp .env.example .env    # already pre-filled with MONGO_ROOT_USERNAME=Denno / PASSWORD=Denno4
+cp .env.example .env
 
 # 2. Start the local services and app
 #    Use your preferred local setup for MongoDB, Redis, and the backend/frontend processes.
@@ -208,9 +208,9 @@ All variables live in `.env` (copy from `.env.example`).
 
 | Variable | Purpose | Default (dev) |
 |---|---|---|
-| `MONGO_ROOT_USERNAME` | MongoDB root user | `Denno` |
-| `MONGO_ROOT_PASSWORD` | MongoDB root password | `Denno4` ⚠️ rotate before production |
-| `MONGO_URI` | Full connection string with auth | `mongodb://Denno:Denno4@localhost:27017/?authSource=admin` |
+| `MONGO_ROOT_USERNAME` | MongoDB root user | `(set a strong local username)` |
+| `MONGO_ROOT_PASSWORD` | MongoDB root password | `(set a strong local password; rotate before production)` |
+| `MONGO_URI` | Full connection string with auth | `mongodb://<username>:<password>@localhost:27017/?authSource=admin` |
 | `MONGO_DB_NAME` | Database name | `denno` |
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` |
 | `JWT_SECRET` | Signs all issued tokens | *(set a long random value)* |
