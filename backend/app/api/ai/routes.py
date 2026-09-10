@@ -416,9 +416,23 @@ async def generate_cover_letter(
     db: AsyncSession = Depends(get_session),
 ):
     import re
+    from app.models.sqlalchemy_models import User
     category_guidance = CATEGORY_PROMPTS.get(payload.category, CATEGORY_PROMPTS["Software Engineering"])
     context = await get_user_context(db, user_id)
-    
+
+    # ── Fetch live user profile for personalisation ──
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    user_obj = user_res.scalar_one_or_none()
+    candidate_name = ""
+    candidate_email = ""
+    candidate_phone = ""
+    candidate_location = ""
+    if user_obj:
+        candidate_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
+        candidate_email = user_obj.email or ""
+        candidate_phone = getattr(user_obj, "phone", "") or ""
+        candidate_location = getattr(user_obj, "location", "") or ""
+
     raw_skills = context.get("skills", []) or []
     BANNED_SKILLS = {"bmw group", "bmw", "idealworks", "aboosto", "start-up", "startup", "munichjobs", "itinternships", "automationandrobotics", "innovation", "growth", "mentorship"}
     clean_skills = [s for s in raw_skills if s.lower().strip() not in BANNED_SKILLS and not (len(s) > 12 and " " not in s and s == s.lower())]
@@ -435,12 +449,14 @@ async def generate_cover_letter(
             model="claude-sonnet-4-6",
             max_tokens=1200,
             system=(
-                f"You are an expert career strategist writing an authentic, tailored cover letter for a candidate with a BSc in Information Security & Forensics applying for a role in {payload.category}. "
+                f"You are an expert career strategist writing an authentic, tailored cover letter for {candidate_name or 'the candidate'} "
+                f"applying for a role in {payload.category}. "
                 f"Tone: {payload.tone}. Guidance: {category_guidance}. "
-                f"The candidate has genuine skills in: {skills_hint}. "
-                "Structure in structured formal cover letter paragraphs with proper date, recipient header, subject line, professional opening, core technical achievements, role alignment, and professional sign-off. "
+                f"The candidate's genuine skills include: {skills_hint}. "
+                f"Contact: {candidate_email}{', ' + candidate_phone if candidate_phone else ''}{', ' + candidate_location if candidate_location else ''}. "
+                "Structure in formal cover letter paragraphs with proper date, recipient header, subject line, professional opening, core technical achievements, role alignment, and professional sign-off. "
                 "CRITICAL INSTRUCTION: Never include company names, hashtags, job portal noise, or raw unspaced words (such as 'BMW Group', 'Idealworks', 'Munichjobs', 'automationandrobotics') as candidate skills or keywords. "
-                "Synthesize job duties into clean, fluent, professional narrative prose."
+                "Synthesize job duties into clean, fluent, professional narrative prose. Sign off with the candidate's real name."
             ),
             messages=[{
                 "role": "user",
@@ -454,30 +470,34 @@ async def generate_cover_letter(
         text = "".join(b.text for b in resp.content if b.type == "text")
         return {"letter": text, "category": payload.category}
 
-    # Authentic fallback template matching Dennis Koech's real sample document
+    # Fallback template using live user profile data
     today_str = datetime.now().strftime("%d %B %Y")
     target_role_upper = payload.job_title.upper()
+    sign_name = candidate_name or "Applicant"
+    sign_phone = candidate_phone or ""
+    sign_email = candidate_email or ""
+    sign_location = candidate_location or ""
+    contact_line = " | ".join(filter(None, [sign_location, sign_phone, sign_email]))
     letter = (
-        f"DENNIS KOECH\n"
+        f"{sign_name.upper()}\n"
         f"APPLICATION FOR {target_role_upper}\n"
-        f"Nairobi, Kenya | 0716949061 | denno7721@gmail.com\n\n"
+        f"{contact_line}\n\n"
         f"{today_str}\n\n"
         f"The Human Resources Manager\n"
         f"{payload.company}\n"
-        f"Nairobi, Kenya\n\n"
+        f"{sign_location or 'Nairobi, Kenya'}\n\n"
         f"RE: APPLICATION FOR {target_role_upper} POSITION\n\n"
         f"Dear Human Resources Manager,\n\n"
-        f"I am writing to apply for the {payload.job_title} position at {payload.company}. I have completed my Bachelor of Science in Information Security and Forensics and am eager to apply my technical training and practical experience in a professional ICT support environment.\n\n"
+        f"I am writing to apply for the {payload.job_title} position at {payload.company}. "
+        f"I am eager to apply my technical training and practical experience in a professional environment.\n\n"
         f"My background aligns closely with the requirements of the position. I have practical knowledge of {skills_hint}, system administration concepts, technical documentation, and supporting security technologies.\n\n"
-        f"Through my practical projects, I have worked with OPNSense firewall, VirtualBox, Kali Linux, Wireshark, Nmap and Suricata. I have configured virtual LAN/WAN environments, investigated connectivity problems, analysed network traffic and explored intrusion detection and security monitoring. I have also developed a Python/Flask and MongoDB cybersecurity application involving authentication, threat analysis, dashboards and reporting.\n\n"
-        f"I am particularly interested in this opportunity because the role combines first-line technical support, hardware and software maintenance, network troubleshooting, user support, IT asset management, backups and information security. These responsibilities match both my technical training and the practical ICT experience I am seeking to build.\n\n"
         f"I am a reliable, organized and quick-learning individual with strong analytical and problem-solving abilities. I understand the importance of professionalism, confidentiality, accurate documentation and timely support when assisting users. I am comfortable working independently, collaborating with colleagues and escalating complex technical issues when necessary.\n\n"
-        f"I would appreciate the opportunity to contribute to {payload.company} while developing my professional ICT support and systems administration skills. I am available for an interview at your convenience and would be pleased to provide any additional information required.\n\n"
-        f"Thank you for considering my application. I look forward to the opportunity to discuss my suitability for the position.\n\n"
+        f"I would appreciate the opportunity to contribute to {payload.company}. I am available for an interview at your convenience and would be pleased to provide any additional information required.\n\n"
+        f"Thank you for considering my application. I look forward to discussing my suitability for the position.\n\n"
         f"Yours faithfully,\n\n"
-        f"Dennis Koech,\n"
-        f"0716949061,\n"
-        f"denno7721@gmail.com."
+        f"{sign_name},{chr(10)}"
+        f"{(sign_phone + ',' + chr(10)) if sign_phone else ''}"
+        f"{sign_email + '.' if sign_email else ''}"
     )
     return {"letter": letter, "category": payload.category}
 

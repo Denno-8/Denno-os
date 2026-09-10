@@ -396,7 +396,7 @@ class AuthService:
                 "LinkedIn OAuth credentials are not configured in backend .env",
             )
 
-        redirect_uri = f"{settings.vite_api_url}/auth/linkedin/callback"
+        redirect_uri = f"{settings.frontend_origin}/auth/linkedin/callback"
         async with httpx.AsyncClient(timeout=10.0) as client:
             token_res = await client.post(
                 "https://www.linkedin.com/oauth/v2/accessToken",

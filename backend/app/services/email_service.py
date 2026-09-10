@@ -645,10 +645,10 @@ class EmailService:
 
         if not applicant_info:
             applicant_info = {
-                "name": "Dennis Koech",
-                "email": "deno14619@gmail.com",
-                "phone": "+254 716 949 061",
-                "location": "Nairobi, Kenya"
+                "name": "Job Applicant",
+                "email": "",
+                "phone": "",
+                "location": ""
             }
 
         applicant_name = applicant_info.get("name") or "Dennis Koech"

@@ -64,6 +64,7 @@ class Settings(BaseSettings):
 
     # CORS & Frontend
     frontend_origin: str = Field(default="http://localhost:5173", alias="FRONTEND_ORIGIN")
+    vite_api_url: str = Field(default="http://localhost:8000/api/v1", alias="VITE_API_URL")
     frontend_origins: List[str] = [
         "http://localhost:5173",
         "http://localhost:5174",
