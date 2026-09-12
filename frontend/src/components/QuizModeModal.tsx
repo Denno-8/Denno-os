@@ -35,7 +35,7 @@ export default function QuizModeModal({ isOpen, onClose, onQuestionMastered }: Q
     let pool: QuizQuestion[] = [];
 
     if (source === "all" || source === "q200") {
-      const q200Mapped: QuizQuestion[] = TOP_200_QUESTIONS.map((q) => ({
+      const q200Mapped: QuizQuestion[] = TOP_200_QUESTIONS.map((q: InterviewQuestionItem) => ({
         id: q.id,
         question: q.question,
         answer: q.answer,
@@ -48,7 +48,7 @@ export default function QuizModeModal({ isOpen, onClose, onQuestionMastered }: Q
     }
 
     if (source === "all" || source === "cybersec") {
-      const cyberMapped: QuizQuestion[] = CYBERSECURITY_QUESTIONS.map((q) => ({
+      const cyberMapped: QuizQuestion[] = CYBERSECURITY_QUESTIONS.map((q: SecurityQuestionItem) => ({
         id: q.id + 1000, // offset to avoid id collisions
         question: q.question,
         answer: q.answer,
