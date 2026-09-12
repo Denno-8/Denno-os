@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import LoginPage from "./pages/Auth/LoginPage";
+import OnboardingPage from "./pages/Auth/OnboardingPage";
 import OAuthCallbackPage from "./pages/Auth/OAuthCallbackPage";
 import AppLayout from "./routes/AppLayout";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -70,6 +71,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Navigate to={authService.isAuthenticated() ? "/applications" : "/login"} replace />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
 
               {/* OAuth callback routes — Google and LinkedIn redirect here after consent screen */}
               <Route path="/auth/google/callback" element={<OAuthCallbackPage />} />

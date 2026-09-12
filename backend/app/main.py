@@ -162,7 +162,10 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
+from app.api.metrics import router as metrics_router
+
 app.include_router(api_router)
+app.include_router(metrics_router)
 
 
 @app.get("/health", tags=["System"])

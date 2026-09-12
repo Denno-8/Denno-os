@@ -1,0 +1,197 @@
+name: Deploy — Production
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/ci.yml"
+
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "Skip tests (emergency deploy only)"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # never cancel a deploy mid-flight
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/denno
+
+jobs:
+  # ── Guard: run tests unless explicitly skipped ───────────────────────────────
+  pre-deploy-tests:
+    name: 🧪 Pre-deploy Tests
+    uses: ./.github/workflows/ci.yml
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+
+  # ── Build & push Docker images to GHCR ──────────────────────────────────────
+  build-and-push:
+    name: 🐳 Build & Push Images
+    runs-on: ubuntu-latest
+    needs: [pre-deploy-tests]
+    if: always() && (needs.pre-deploy-tests.result == 'success' || needs.pre-deploy-tests.result == 'skipped')
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      backend_image: ${{ steps.meta-backend.outputs.tags }}
+      frontend_image: ${{ steps.meta-frontend.outputs.tags }}
+      sha_short: ${{ steps.sha.outputs.sha_short }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Short SHA
+        id: sha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Backend image metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Frontend image metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-frontend
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Deploy to production VPS via SSH ─────────────────────────────────────────
+  deploy-vps:
+    name: 🚀 Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            cd /opt/denno
+
+            echo "=== Pulling latest images ==="
+            docker compose pull
+
+            echo "=== Running database migrations ==="
+            docker compose run --rm backend alembic upgrade head
+
+            echo "=== Rolling update (zero-downtime) ==="
+            docker compose up -d --no-build --remove-orphans
+
+            echo "=== Waiting for health check ==="
+            sleep 8
+            curl -sf http://localhost/health/ready || (echo "Health check failed!" && exit 1)
+
+            echo "=== Pruning old images ==="
+            docker image prune -f --filter "until=48h"
+
+            echo "✅ Deploy complete — $(date)"
+
+  # ── Post-deploy: smoke test public endpoints ─────────────────────────────────
+  smoke-test:
+    name: 💨 Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-vps]
+
+    steps:
+      - name: Health check
+        run: |
+          echo "Testing /health..."
+          curl -sf ${{ secrets.PRODUCTION_URL }}/health
+          echo ""
+          echo "Testing /health/ready..."
+          curl -sf ${{ secrets.PRODUCTION_URL }}/health/ready
+          echo ""
+          echo "✅ Smoke tests passed"
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "✅ *Denno* deployed to production — <${{ secrets.PRODUCTION_URL }}|open app>",
+              "attachments": [{
+                "color": "good",
+                "fields": [
+                  { "title": "Commit", "value": "${{ github.sha }}", "short": true },
+                  { "title": "Author", "value": "${{ github.actor }}", "short": true }
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🚨 *Denno* production deploy FAILED — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view logs>"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true
