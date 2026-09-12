@@ -14,7 +14,7 @@ on:
       skip_tests:
         description: "Skip tests (emergency deploy only)"
         required: false
-        default: "false"
+        default: false
         type: boolean
 
 concurrency:
