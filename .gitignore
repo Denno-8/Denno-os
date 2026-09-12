@@ -28,7 +28,8 @@ frontend/.env.*
 secrets/
 
 # Data & Database storage
-data/
+/data/
+!frontend/src/data/
 uploads/
 backend/uploads/
 *.db
