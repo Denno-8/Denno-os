@@ -246,8 +246,15 @@ class AuthService:
             return
         token = create_reset_token(str(user.id))
         logger.info("Password reset token issued for user_id=%s", user.id)
-        # TODO: Send the token via email once SMTP is configured.
-        # For now the token is returned only to the calling service, not logged.
+        # Send the reset link via email (no-op if SMTP is not configured)
+        try:
+            from app.core.email_sender import send_password_reset
+            first_name = getattr(user, "first_name", "") or ""
+            reset_link = f"{__import__('app.core.config', fromlist=['settings']).settings.frontend_origin}/reset-password?token={token}"
+            await send_password_reset(user.email, token, first_name)
+            logger.info("Password reset email dispatched for user_id=%s", user.id)
+        except Exception as exc:
+            logger.error("Failed to send password reset email for user_id=%s: %s", user.id, exc)
 
     async def confirm_password_reset(self, token: str, new_password: str) -> None:
         try:
@@ -449,6 +456,95 @@ class AuthService:
                     "first_name": first_name,
                     "last_name": last_name,
                     "linkedin": f"https://www.linkedin.com/in/{sub}" if sub else "",
+                    "role": "user",
+                }
+                user = await self.repo.create(user_doc)
+
+            user_id = str(user.id)
+            role = user.role or "user"
+            return TokenResponse(
+                access_token=create_access_token(user_id, role=role),
+                refresh_token=create_refresh_token(user_id),
+            )
+
+    async def authenticate_github(self, code: str) -> TokenResponse:
+        """Exchange a GitHub OAuth authorization code for a Denno session."""
+        import uuid
+        import httpx
+
+        if not settings.github_client_id or not settings.github_client_secret:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "GitHub OAuth credentials are not configured in backend .env",
+            )
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Exchange code for GitHub access token
+            token_res = await client.post(
+                "https://github.com/login/oauth/access_token",
+                data={
+                    "client_id": settings.github_client_id,
+                    "client_secret": settings.github_client_secret,
+                    "code": code,
+                },
+                headers={"Accept": "application/json"},
+            )
+            if token_res.status_code != 200:
+                logger.error("GitHub token exchange failed: %s", token_res.text)
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Failed to exchange authorization code with GitHub",
+                )
+            token_data = token_res.json()
+            access_token = token_data.get("access_token")
+            if not access_token:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid token response from GitHub")
+
+            # 2. Fetch user profile
+            user_res = await client.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+            )
+            if user_res.status_code != 200:
+                logger.error("GitHub user fetch failed: %s", user_res.text)
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Failed to fetch profile from GitHub")
+
+            profile = user_res.json()
+            login = profile.get("login", "")
+            name = profile.get("name") or login
+            name_parts = name.split(" ", 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            # 3. Fetch primary verified email
+            email_res = await client.get(
+                "https://api.github.com/user/emails",
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+            )
+            emails_data = email_res.json() if email_res.status_code == 200 else []
+            email = None
+            for e in emails_data:
+                if e.get("primary") and e.get("verified"):
+                    email = e.get("email")
+                    break
+            if not email:
+                email = profile.get("email")
+            if not email:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "GitHub account has no verified public email")
+
+            existing = await self.repo.get_by_email(email)
+            if existing:
+                user = existing
+                # Update GitHub link if not already set
+                if not getattr(user, "github", None) and login:
+                    await self.repo.update(user.id, {"github": f"https://github.com/{login}"})
+            else:
+                user_doc = {
+                    "email": email,
+                    "password_hash": hash_password(str(uuid.uuid4())),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "github": f"https://github.com/{login}" if login else "",
                     "role": "user",
                 }
                 user = await self.repo.create(user_doc)

@@ -57,14 +57,14 @@ class CVVersionService:
         user_res = await self.repo.session.execute(select(User).where(User.id == user_id))
         user_obj = user_res.scalars().first()
 
-        full_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip() if user_obj else "DENNIS KIBET KOECH"
-        if not full_name or full_name in ("Admin User", "Dennis K"):
-            full_name = "DENNIS KIBET KOECH"
-        candidate_email = user_obj.email if user_obj and user_obj.email and user_obj.email not in ("admin@denno.com", "user@denno.com") else "denniskoech584@gmail.com"
-        candidate_phone = getattr(user_obj, "phone", "") or "+254 716 949 061"
-        candidate_location = getattr(user_obj, "location", "") or "Nairobi, Kenya"
-        candidate_linkedin = "linkedin.com/in/dennis-kibet-koech"
-        candidate_github = "github.com/dennis-kibet-koech"
+        full_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip() if user_obj else "JOB APPLICANT"
+        if not full_name:
+            full_name = "JOB APPLICANT"
+        candidate_email = user_obj.email if user_obj and user_obj.email else ""
+        candidate_phone = getattr(user_obj, "phone", "") or ""
+        candidate_location = getattr(user_obj, "location", "") or ""
+        candidate_linkedin = getattr(user_obj, "linkedin", "") or ""
+        candidate_github = getattr(user_obj, "github", "") or ""
 
         skills_list = [s.strip() for s in required_skills if s.strip()]
         if not skills_list and description:
@@ -177,17 +177,26 @@ Problem solving | Analytical thinking | Communication | Teamwork | Customer-focu
         return _serialize(cv) if cv else None
 
     async def upload_file(self, cv_id: int, user_id: int, filename: str, file_bytes: bytes) -> dict:
-        """Parse uploaded PDF/DOCX/TXT, save file to disk, extract details, and run real ATS scoring."""
-        import os
-        from app.core.config import settings
+        """Parse uploaded PDF/DOCX/TXT, upload to storage (S3/MinIO or local disk), extract details, and run real ATS scoring."""
+        from app.core.storage import storage
 
-        os.makedirs(settings.upload_dir, exist_ok=True)
-        safe_filename = f"cv_{cv_id}_{filename.replace(' ', '_')}"
-        file_path = os.path.join(settings.upload_dir, safe_filename)
-        with open(file_path, "wb") as f:
-            f.write(file_bytes)
+        # Build a storage key (used as S3 object key or local filename)
+        safe_name = filename.replace(" ", "_")
+        key = f"cv_{cv_id}_{safe_name}"
 
+        # Determine content type
         ext = filename.lower().split(".")[-1]
+        content_type_map = {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "doc": "application/msword",
+        }
+        content_type = content_type_map.get(ext, "text/plain")
+
+        # Upload to storage (S3/MinIO or local fallback)
+        file_url = await storage.upload_file(key, file_bytes, content_type)
+
+        # Parse content
         text = ""
         if ext == "pdf":
             text = extract_text_from_pdf(file_bytes)
@@ -214,7 +223,7 @@ Problem solving | Analytical thinking | Communication | Teamwork | Customer-focu
             "parsed_sections": sections,
             "skills": combined_skills,
             "ats_score": analysis["ats_score"],
-            "file_url": f"/uploads/{safe_filename}"
+            "file_url": file_url,
         }
         updated = await self.repo.update(cv_id, user_id, patch)
         serialized = _serialize(updated)
@@ -223,8 +232,7 @@ Problem solving | Analytical thinking | Communication | Teamwork | Customer-focu
 
     async def get_raw_file(self, cv_id: int, user_id: int) -> tuple[bytes, str, str]:
         """Returns (file_bytes, media_type, filename) for downloading original uploaded CV file."""
-        import os
-        from app.core.config import settings
+        from app.core.storage import storage
 
         cv = await self.repo.get(cv_id, user_id)
         if not cv:
@@ -232,14 +240,17 @@ Problem solving | Analytical thinking | Communication | Teamwork | Customer-focu
 
         file_url = getattr(cv, "file_url", None)
         if file_url:
-            filename = file_url.split("/")[-1]
-            file_path = os.path.join(settings.upload_dir, filename)
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    content = f.read()
-                ext = filename.split(".")[-1].lower()
-                media_type = "application/pdf" if ext == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if ext in ["docx", "doc"] else "text/plain"
-                download_name = filename.replace(f"cv_{cv_id}_", "")
+            # Derive storage key from URL (strip leading /uploads/ for local, or use as-is for S3)
+            key = file_url.split("/")[-1]
+            content = await storage.download_file(key)
+            if content:
+                ext = key.split(".")[-1].lower()
+                media_type = (
+                    "application/pdf" if ext == "pdf"
+                    else "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if ext in ["docx", "doc"]
+                    else "text/plain"
+                )
+                download_name = key.replace(f"cv_{cv_id}_", "")
                 return content, media_type, download_name
 
         # Fallback: serve parsed text content as a text file if original file is missing
@@ -565,7 +576,7 @@ Problem solving | Analytical thinking | Communication | Teamwork | Customer-focu
             if user_obj:
                 clean_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
             if not clean_name:
-                clean_name = "Dennis K"
+                clean_name = "Job Applicant"
 
         story.append(Paragraph(esc(clean_name), title_style))
 

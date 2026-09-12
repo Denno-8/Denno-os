@@ -141,18 +141,23 @@ Before booting the stack, verify the following security parameters:
 
 ---
 
-## 4. Data Seeding & Admin Promotion
+"## 4. Data Seeding & Admin Promotion
 
-1. Run database migrations & initial seed scripts inside the running backend container:
+1. Run database migrations using Alembic inside the running backend container:
+   ```bash
+   docker compose exec backend alembic upgrade head
+   ```
+
+2. Seed initial data scripts:
    ```bash
    docker compose exec backend python scripts/seed_companies.py
    docker compose exec backend python scripts/seed_jobs.py
    docker compose exec backend python scripts/seed_job_sources.py
    ```
 
-2. Register your user account in the frontend UI (`https://denno.yourdomain.com/register`).
+3. Register your user account in the frontend UI (`https://denno.yourdomain.com/register`).
 
-3. Grant your account administrative privileges:
+4. Grant your account administrative privileges:
    ```bash
    docker compose exec backend python scripts/promote_admin.py admin@yourdomain.com
    ```
@@ -171,13 +176,18 @@ To secure traffic with HTTPS using Certbot on your host machine:
 
 2. Obtain SSL certificate:
    ```bash
-   sudo certbot --nginx -d denno.yourdomain.com
+   sudo certbot --nginx -d denno.app -d www.denno.app
+   ```
+   *Alternatively, using Docker webroot path:*
+   ```bash
+   sudo certbot certonly --webroot -w /var/www/certbot -d denno.app -d www.denno.app
    ```
 
-3. Ensure automatic certificate renewal:
+3. Ensure automatic certificate renewal and test reload:
    ```bash
+   sudo certbot renew --dry-run
    sudo systemctl status certbot.timer
-   ```
+   ```"
 
 ---
 

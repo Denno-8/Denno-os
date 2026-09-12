@@ -8,12 +8,24 @@ Run a worker with:
 Run the scheduler (for the periodic tasks below) with:
     celery -A app.core.celery_app beat --loglevel=info
 """
-from celery import Celery
+"from celery import Celery
 from celery.schedules import crontab
 
 from app.core.config import settings
 
-celery_app = Celery(
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            integrations=[CeleryIntegration()],
+            environment=settings.app_env,
+        )
+    except Exception:
+        pass
+
+celery_app = Celery("
     "denno",
     broker=settings.redis_url,
     backend=settings.redis_url,

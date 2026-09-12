@@ -323,7 +323,7 @@ def _generate_fallback_cv_pdf(
     def esc(txt: str) -> str:
         return html.escape(txt or "")
 
-    safe_name = applicant_name or "Dennis K"
+    safe_name = applicant_name or "Job Applicant"
     story.append(Paragraph(esc(safe_name).upper(), title_style))
 
     display_role = role_title or cv_title or "Senior Full-Stack Software Engineer"
@@ -635,10 +635,10 @@ class EmailService:
                 if user_obj:
                     full_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
                     applicant_info = {
-                        "name": full_name or "Dennis K",
+                        "name": full_name or "Job Applicant",
                         "email": user_obj.email or "",
                         "phone": getattr(user_obj, "phone", "") or "",
-                        "location": getattr(user_obj, "location", "") or "Nairobi, Kenya"
+                        "location": getattr(user_obj, "location", "") or ""
                     }
             except Exception:
                 pass
@@ -651,10 +651,10 @@ class EmailService:
                 "location": ""
             }
 
-        applicant_name = applicant_info.get("name") or "Dennis Koech"
-        applicant_email = applicant_info.get("email") or "deno14619@gmail.com"
-        applicant_phone = applicant_info.get("phone") or "+254 716 949 061"
-        applicant_location = applicant_info.get("location") or "Nairobi, Kenya"
+        applicant_name = applicant_info.get("name") or "Job Applicant"
+        applicant_email = applicant_info.get("email") or ""
+        applicant_phone = applicant_info.get("phone") or ""
+        applicant_location = applicant_info.get("location") or ""
         clean_applicant_filename = "".join(c for c in applicant_name if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
         if not clean_applicant_filename:
             clean_applicant_filename = "Applicant"
@@ -763,12 +763,8 @@ class EmailService:
 
         rec_domain = recruiter_email.split("@")[-1].strip().lower() if "@" in recruiter_email else ""
         if rec_domain in ["acme.com", "example.com", "testcorp.com", "domain.com"]:
-            return {
-                "email_sent": False,
-                "smtp_error": f"Recruiter email '{recruiter_email}' is a placeholder/test domain. Application saved to pipeline tracker; submit on official job portal link."
-            }
-
-        if settings.emails_enabled and settings.smtp_user and settings.smtp_password and recruiter_email:
+            smtp_error_msg = f"Recruiter email '{recruiter_email}' is a placeholder/test domain. Application logged to Sent Mail outbox; submit on official job portal link if required."
+        elif settings.emails_enabled and settings.smtp_user and settings.smtp_password and recruiter_email:
             def _do_send_smtp():
                 msg = MIMEMultipart("mixed")
                 

@@ -33,13 +33,13 @@ class PortalAutofillService:
             if j_obj:
                 job_info = {"title": j_obj.title, "company_name": j_obj.company_name}
 
-        first_name = user_obj.first_name if user_obj and user_obj.first_name else "Dennis"
-        last_name = user_obj.last_name if user_obj and user_obj.last_name else "Koech"
-        email = user_obj.email if user_obj and user_obj.email else "deno14619@gmail.com"
-        phone = user_obj.phone if user_obj and user_obj.phone else "+254 716 949 061"
-        location = user_obj.location if user_obj and user_obj.location else "Nairobi, Kenya"
-        linkedin = user_obj.linkedin if user_obj and user_obj.linkedin else "https://linkedin.com/in/dennis-k"
-        github = user_obj.github if user_obj and user_obj.github else "https://github.com/deno-dev"
+        first_name = user_obj.first_name if user_obj and user_obj.first_name else "Applicant"
+        last_name = user_obj.last_name if user_obj and user_obj.last_name else ""
+        email = user_obj.email if user_obj and user_obj.email else ""
+        phone = user_obj.phone if user_obj and user_obj.phone else ""
+        location = user_obj.location if user_obj and user_obj.location else ""
+        linkedin = user_obj.linkedin if user_obj and user_obj.linkedin else ""
+        github = user_obj.github if user_obj and user_obj.github else ""
         summary = user_obj.summary if user_obj and user_obj.summary else (
             f"Experienced {job_info['title']} with strong expertise in full-stack software development, cloud infrastructure, and API architecture."
         )

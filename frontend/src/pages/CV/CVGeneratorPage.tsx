@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText, Plus, Trash2, Download, Save, Eye, Edit3,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useCreateCV, useGenerateCVForJob } from "../../hooks/useCV";
 import { useJobs } from "../../hooks/useJobs";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { cvService } from "../../services/cv.service";
 
 /* ─── Types ─── */
@@ -153,7 +154,23 @@ const SAMPLE_CV_LABELS: Record<SampleCVRole, string> = {
 /* ─── Main Page ─── */
 export default function CVGeneratorPage() {
   const navigate = useNavigate();
+  const { data: currentUser } = useCurrentUser();
   const [cv, setCV] = useState<CVData>(SAMPLE_CV);
+
+  useEffect(() => {
+    if (currentUser) {
+      const userFullName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim();
+      setCV((prev) => ({
+        ...prev,
+        fullName: userFullName || prev.fullName,
+        email: currentUser.email || prev.email,
+        phone: currentUser.phone || prev.phone,
+        location: currentUser.location || prev.location,
+        linkedin: currentUser.linkedin || prev.linkedin,
+        github: currentUser.github || prev.github,
+      }));
+    }
+  }, [currentUser]);
   const [newSkill, setNewSkill] = useState("");
   const [activeSection, setActiveSection] = useState<string>("personal");
   const [viewMode, setViewMode] = useState<"split" | "editor" | "preview">("split");
@@ -1004,12 +1021,12 @@ function CVPreview({ cv, template, theme, targetRole }: { cv: CVData; template: 
 
   const cleanCandidateName = (name: string) => {
     if (!name || name.includes("@") || name.toLowerCase().includes("head of") || name.toLowerCase().startsWith("tailored")) {
-      return "Dennis K";
+      return "Job Applicant";
     }
     return (name || "")
       .replace(/\s*[\-—–|]\s*(EXECUTIVE|TECH_MINIMAL|CLASSIC_SERIF|CREATIVE_SPLIT|MODERN|MINIMAL)\b.*$/i, "")
       .replace(/^(Target Role Focus|Focus Area|Role Focus):\s*/i, "")
-      .trim() || "Dennis K";
+      .trim() || "Job Applicant";
   };
 
   const cleanRoleTitle = (raw?: string) => {

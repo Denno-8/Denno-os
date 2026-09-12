@@ -107,10 +107,10 @@ export default function ApplyEditModal({ isOpen, onClose, job, onSuccessApply }:
     );
     const candidateName = currentUser
       ? `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || currentUser.email
-      : "Dennis Koech";
-    const candidatePhone = currentUser?.phone || "0716949061";
-    const candidateEmail = currentUser?.email || "denno7721@gmail.com";
-    const candidateLocation = currentUser?.location || "Nairobi, Kenya";
+      : "Job Applicant";
+    const candidatePhone = currentUser?.phone || "";
+    const candidateEmail = currentUser?.email || "";
+    const candidateLocation = currentUser?.location || "";
     const todayDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
     const targetTitle = (form.role || job?.title || "ICT ASSISTANT").toUpperCase();
     const company = form.company_name || job?.company_name || "Target Company";

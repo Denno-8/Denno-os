@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     smtp_from_email: str = Field(default="noreply@denno.app", alias="SMTP_FROM_EMAIL")
     smtp_from_name: str = Field(default="Denno Career OS", alias="SMTP_FROM_NAME")
     emails_enabled: bool = Field(default=False, alias="EMAILS_ENABLED")
+    # True = plain SSL on connect (port 465); False = STARTTLS after connect (port 587)
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+    # STARTTLS upgrade. Set to False only if SMTP_USE_SSL=True or testing with localhost:1025
+    smtp_tls: bool = Field(default=True, alias="SMTP_TLS")
 
     # CORS & Frontend
     frontend_origin: str = Field(default="http://localhost:5173", alias="FRONTEND_ORIGIN")
@@ -86,6 +90,20 @@ class Settings(BaseSettings):
     github_client_secret: str = Field(default="", alias="GITHUB_CLIENT_SECRET")
     google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")
     google_client_secret: str = Field(default="", alias="GOOGLE_CLIENT_SECRET")
+
+    # Cloud Object Storage (S3 or MinIO — both use the same boto3 client)
+    # Leave blank to use local disk storage (upload_dir) as fallback.
+    s3_endpoint_url: str = Field(default="", alias="S3_ENDPOINT_URL")  # MinIO: http://localhost:9000; S3: leave blank
+    s3_bucket_name: str = Field(default="denno-uploads", alias="S3_BUCKET_NAME")
+    aws_access_key_id: str = Field(default="", alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str = Field(default="", alias="AWS_SECRET_ACCESS_KEY")
+    aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
+
+    # Observability — Sentry error tracking
+    # Obtain a DSN at https://sentry.io (free tier available).
+    # Leave blank to disable Sentry (local development).
+    sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
+    sentry_traces_sample_rate: float = Field(default=0.1, alias="SENTRY_TRACES_SAMPLE_RATE")
 
     model_config = SettingsConfigDict(
         env_file=("../.env", ".env"),

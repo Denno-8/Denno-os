@@ -31,6 +31,7 @@ const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/Admin/AdminDashboard"));
+const AdminScraperPage = lazy(() => import("./pages/Admin/AdminScraperPage"));
 const AdminUsersPage = lazy(() => import("./pages/Admin/AdminUsersPage"));
 const AdminJobsPage = lazy(() => import("./pages/Admin/AdminJobsPage"));
 const AdminCompaniesPage = lazy(() => import("./pages/Admin/AdminCompaniesPage"));
@@ -96,6 +97,7 @@ export default function App() {
                   {/* ── Admin-only routes ── */}
                   <Route element={<AdminRoute />}>
                     <Route path="/admin" element={<AdminDashboard />} />
+                    <Route path="/admin/scrapers" element={<AdminScraperPage />} />
                     <Route path="/admin/users" element={<AdminUsersPage />} />
                     <Route path="/admin/jobs" element={<AdminJobsPage />} />
                     <Route path="/admin/companies" element={<AdminCompaniesPage />} />

@@ -21,3 +21,15 @@ pdfplumber==0.11.0
 python-docx==1.1.2
 openpyxl==3.1.5
 reportlab==4.2.5
+
+# §1 SMTP Email
+aiosmtplib>=3.0
+
+# §2 Cloud Object Storage (S3 / MinIO)
+boto3>=1.35.0
+
+# §8 Database Migrations
+alembic>=1.13.0
+
+# §9 Observability
+sentry-sdk[fastapi,celery]>=2.0.0

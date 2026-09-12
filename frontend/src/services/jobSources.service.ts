@@ -1,6 +1,8 @@
 import { api } from "./api";
 import type { JobSource } from "../types/jobSource.types";
 
+export type { JobSource };
+
 export const jobSourcesService = {
   list: (status?: string) =>
     api.get<JobSource[]>(`/job-sources${status && status !== "All" ? `?status=${status}` : ""}`),

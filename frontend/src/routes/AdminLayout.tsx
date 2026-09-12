@@ -11,12 +11,14 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  Radio,
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { authService } from "../services/auth.service";
 
 const ADMIN_LINKS = [
   { to: "/admin",          label: "Dashboard",  icon: LayoutDashboard, exact: true },
+  { to: "/admin/scrapers", label: "Scrapers",   icon: Radio },
   { to: "/admin/users",    label: "Users",      icon: Users },
   { to: "/admin/jobs",     label: "Jobs",       icon: Briefcase },
   { to: "/admin/companies",label: "Companies",  icon: Building2 },
@@ -35,6 +37,7 @@ export default function AdminLayout() {
 
   const getPageTitle = () => {
     if (location.pathname === "/admin") return "Dashboard";
+    if (location.pathname.startsWith("/admin/scrapers")) return "Scraper Engine Monitor";
     if (location.pathname.startsWith("/admin/users")) return "User Management";
     if (location.pathname.startsWith("/admin/jobs")) return "Job Management";
     if (location.pathname.startsWith("/admin/companies")) return "Company Management";

@@ -4,6 +4,7 @@ import {
   X, Download, ArrowRight, Clock, RefreshCw, Globe, Inbox,
 } from "lucide-react";
 import { cvService } from "../services/cv.service";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface WebsiteApplyAssistantModalProps {
   isOpen: boolean;
@@ -29,15 +30,17 @@ export default function WebsiteApplyAssistantModal({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const { data: currentUser } = useCurrentUser();
+
   if (!isOpen) return null;
 
   const candidateInfo = {
-    fullName: "Dennis Koech",
-    email: "deno14619@gmail.com",
-    phone: "+254 716 949 061",
-    location: "Nairobi, Kenya",
-    linkedIn: "https://linkedin.com/in/denniskoech",
-    gitHub: "https://github.com/denniskoech-dev",
+    fullName: currentUser ? `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || currentUser.email : "Job Applicant",
+    email: currentUser?.email || "",
+    phone: currentUser?.phone || "",
+    location: currentUser?.location || "",
+    linkedIn: currentUser?.linkedin || "",
+    gitHub: currentUser?.github || "",
   };
 
   const handleCopy = (text: string, fieldName: string) => {
@@ -48,7 +51,7 @@ export default function WebsiteApplyAssistantModal({
 
   const handleDownloadResume = () => {
     try {
-      cvService.exportPDF(cvVersionId || "1", "Sapphire", `Resume_Dennis_Koech_${companyName.replace(/\s+/g, "_")}`);
+      cvService.exportPDF(cvVersionId || "1", "Sapphire", `Resume_${candidateInfo.fullName.replace(/\s+/g, "_")}_${companyName.replace(/\s+/g, "_")}`);
     } catch (e) {
       console.warn("Resume download failed", e);
     }
@@ -104,7 +107,7 @@ export default function WebsiteApplyAssistantModal({
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               </div>
               <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5 m-0 font-medium">
-                When you submit on the employer portal, any confirmation or interview invite arriving at <strong>deno14619@gmail.com</strong> will be automatically caught and logged in your pipeline!
+                When you submit on the employer portal, any confirmation or interview invite arriving at <strong>{candidateInfo.email || "your email"}</strong> will be automatically caught and logged in your pipeline!
               </p>
             </div>
           </div>

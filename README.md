@@ -56,17 +56,17 @@ browser tabs.
 This repository contains a working full-stack build: a FastAPI + PostgreSQL (with auto SQLite fallback) backend across 14 modules, a React + TypeScript frontend, and the supporting
 infrastructure (Redis caching, Celery background jobs, seed data, and a test suite).
 
-## Screenshots
+"## Screenshots
 
 <div align="center">
 
-<img src="https://placehold.co/380x260/F1F5F9/0F172A?text=Applications+Kanban" width="30%" alt="Applications Kanban board placeholder" />
-<img src="https://placehold.co/380x260/F1F5F9/0F172A?text=Job+Intelligence+Feed" width="30%" alt="Job feed placeholder" />
-<img src="https://placehold.co/380x260/F1F5F9/0F172A?text=Career+Analytics" width="30%" alt="Analytics dashboard placeholder" />
+<img src="docs/assets/dashboard_mockup.png" width="31%" alt="Denno Executive Dashboard" />
+<img src="docs/assets/cv_tailor_mockup.png" width="31%" alt="AI CV Tailor & ATS Analyzer" />
+<img src="docs/assets/scraper_monitor_mockup.png" width="31%" alt="Scraper Engine Monitor" />
 
-*Placeholders — swap for real screenshots once the frontend is deployed. See [Verification Status](#verification-status) for why no live screenshots exist yet.*
+*Denno Career OS Platform Interface — Dashboard, AI CV Tailor, and Scraper Engine Control Panel.*
 
-</div>
+</div>"
 
 ## Features
 

@@ -24,7 +24,22 @@ class NotificationService:
         doc = payload.model_dump()
         doc["user_id"] = user_id
         created = await self.repo.create(doc)
-        return _serialize(created)
+        serialized = _serialize(created)
+
+        # Push real-time SSE event to any connected browser client
+        try:
+            from app.core.sse_manager import publish_notification
+            await publish_notification(user_id, {
+                "type": "notification",
+                "title": serialized["title"],
+                "message": serialized["message"],
+                "link": serialized["link"],
+                "notification_type": serialized["type"],
+            })
+        except Exception:
+            pass  # SSE publish is non-critical — DB write already succeeded
+
+        return serialized
 
     async def list(self, user_id: int, limit: int = 50) -> list[dict]:
         items = await self.repo.list_for_user(user_id, limit)

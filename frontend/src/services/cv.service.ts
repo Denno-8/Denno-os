@@ -8,6 +8,14 @@ export function generateLocalCompliantCV(payload: {
   company_name: string;
   required_skills: string[];
   description?: string;
+  userInfo?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    location?: string;
+    linkedin?: string;
+    github?: string;
+  };
 }): CVVersion {
   const jobTitle = payload.job_title || "Software Engineer";
   const companyName = payload.company_name || "Target Company";
@@ -16,10 +24,19 @@ export function generateLocalCompliantCV(payload: {
     : ["Python", "FastAPI", "React", "PostgreSQL", "Docker"];
   const descSnippet = payload.description ? payload.description.slice(0, 300).replace(/\n/g, " ").trim() : "";
 
+  const name = payload.userInfo?.name || "JOB APPLICANT";
+  const email = payload.userInfo?.email || "";
+  const phone = payload.userInfo?.phone || "";
+  const location = payload.userInfo?.location || "";
+  const linkedin = payload.userInfo?.linkedin ? `LinkedIn: ${payload.userInfo.linkedin}` : "";
+  const github = payload.userInfo?.github ? `GitHub: ${payload.userInfo.github}` : "";
+  const contactParts = [jobTitle, email, phone, location].filter(Boolean).join(" | ");
+  const socialParts = [linkedin, github].filter(Boolean).join(" | ");
+
   const content = `================================================================================
-                                DENNIS KOECH
-          ${jobTitle} | deno14619@gmail.com | +254 716 949 061 | Nairobi, Kenya
-             LinkedIn: linkedin.com/in/denniskoech | GitHub: github.com/denniskoech-dev
+                                ${name.toUpperCase()}
+          ${contactParts}
+          ${socialParts ? "   " + socialParts : ""}
 ================================================================================
 
 1. EXECUTIVE SUMMARY
@@ -81,12 +98,15 @@ export const cvService = {
   list: () => api.get<CVVersion[]>("/cv"),
   get: (id: string) => api.get<CVVersion>(`/cv/${id}`),
   create: (input: CVVersionCreateInput) => api.post<CVVersion>("/cv", input),
-  generateForJob: async (payload: { job_title: string; company_name: string; required_skills: string[]; description?: string }): Promise<CVVersion> => {
+  generateForJob: async (
+    payload: { job_title: string; company_name: string; required_skills: string[]; description?: string },
+    userInfo?: { name?: string; email?: string; phone?: string; location?: string; linkedin?: string; github?: string }
+  ): Promise<CVVersion> => {
     try {
       return await api.post<CVVersion>("/cv/generate-for-job", payload);
     } catch (err) {
       console.warn("Backend API call failed for generate-for-job. Using client-side ATS-compliant generator fallback.", err);
-      return generateLocalCompliantCV(payload);
+      return generateLocalCompliantCV({ ...payload, userInfo });
     }
   },
   update: (id: string, patch: CVVersionUpdateInput) => api.patch<CVVersion>(`/cv/${id}`, patch),

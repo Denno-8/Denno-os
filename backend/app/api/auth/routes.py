@@ -287,3 +287,44 @@ async def google_callback(
     set_refresh_cookie(response, tokens.refresh_token)
     frontend_redirect = f"{settings.frontend_origin}/auth/google/callback?token={tokens.access_token}"
     return RedirectResponse(frontend_redirect)
+
+
+@router.get("/github/login")
+async def github_login(
+    response: Response,
+    service: AuthService = Depends(get_service),
+):
+    """Redirect user to GitHub OAuth consent screen (or demo login if GITHUB_CLIENT_ID is unconfigured)."""
+    from fastapi.responses import RedirectResponse
+    if not settings.github_client_id:
+        tokens = await service.get_or_create_oauth_user(
+            email="github.user@denno.ai",
+            first_name="GitHub",
+            last_name="User",
+        )
+        set_refresh_cookie(response, tokens.refresh_token)
+        frontend_redirect = f"{settings.frontend_origin}/auth/github/callback?token={tokens.access_token}"
+        return RedirectResponse(frontend_redirect)
+
+    redirect_uri = f"{settings.frontend_origin}/auth/github/callback"
+    url = (
+        f"https://github.com/login/oauth/authorize?"
+        f"client_id={settings.github_client_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"scope=user:email"
+    )
+    return RedirectResponse(url)
+
+
+@router.get("/github/callback")
+async def github_callback(
+    code: str,
+    response: Response,
+    service: AuthService = Depends(get_service),
+):
+    """Callback route that exchanges GitHub code for JWT session."""
+    from fastapi.responses import RedirectResponse
+    tokens = await service.authenticate_github(code)
+    set_refresh_cookie(response, tokens.refresh_token)
+    frontend_redirect = f"{settings.frontend_origin}/auth/github/callback?token={tokens.access_token}"
+    return RedirectResponse(frontend_redirect)

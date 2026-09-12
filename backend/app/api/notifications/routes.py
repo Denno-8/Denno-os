@@ -57,3 +57,31 @@ async def clear_notifications(
 ):
     await service.clear_all(int(user_id))
     return {"status": "cleared"}
+
+
+@router.get("/stream")
+async def notification_stream(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    SSE endpoint — client connects once, server pushes events whenever a new
+    notification is created for this user. No polling required.
+
+    Event format:
+        data: {"type": "notification", "title": "...", "message": "...", "count": N}
+
+    A keepalive comment line is sent every 30 seconds so that reverse
+    proxies (Nginx) and browser clients don't time out idle connections.
+    """
+    from fastapi.responses import StreamingResponse
+    from app.core.sse_manager import event_stream
+
+    return StreamingResponse(
+        event_stream(int(user_id)),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable Nginx proxy buffering for SSE
+            "Connection": "keep-alive",
+        },
+    )

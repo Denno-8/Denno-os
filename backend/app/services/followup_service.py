@@ -66,7 +66,9 @@ class FollowupService:
         user_res = await self.db.execute(select(User).where(User.id == user_id))
         user_obj = user_res.scalars().first()
 
-        applicant_name = f"{user_obj.first_name} {user_obj.last_name}".strip() if user_obj and user_obj.first_name else "Dennis K"
+        applicant_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip() if user_obj else "Job Applicant"
+        if not applicant_name:
+            applicant_name = "Job Applicant"
         applicant_title = user_obj.title if user_obj and user_obj.title else app.role
 
         app_date_str = str(app.date_applied) if app.date_applied else "recently"
@@ -74,6 +76,7 @@ class FollowupService:
 
         subject = f"Following up on Application - {app.role} - {applicant_name}"
         
+        contact_footer = " | ".join(filter(None, [getattr(user_obj, "email", ""), getattr(user_obj, "phone", "")]))
         body = (
             f"Dear Hiring Team at {app.company_name},\n\n"
             f"I hope this email finds you well.\n\n"
@@ -84,7 +87,7 @@ class FollowupService:
             f"Thank you for your time and consideration.\n\n"
             f"Best regards,\n"
             f"{applicant_name}\n"
-            f"{user_obj.email if user_obj else 'deno14619@gmail.com'} | {user_obj.phone if user_obj else '+254 716 949 061'}"
+            f"{contact_footer}"
         )
 
         return {

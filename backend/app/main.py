@@ -22,6 +22,39 @@ import logging
 
 logger = logging.getLogger("denno.main")
 
+# ── Sentry error tracking ─────────────────────────────────────────────────────
+# Initialised early so it captures errors during startup and in background tasks.
+# Silently skipped if SENTRY_DSN is not set (local development).
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            integrations=[
+                StarletteIntegration(transaction_style="endpoint"),
+                FastApiIntegration(transaction_style="endpoint"),
+                SqlalchemyIntegration(),
+                LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
+            ],
+            traces_sample_rate=settings.sentry_traces_sample_rate,
+            environment=settings.app_env,
+            send_default_pii=False,  # GDPR — never send personally identifiable information
+        )
+        logging.getLogger("denno.main").info(
+            "[SENTRY] Initialised — env=%s traces_rate=%.2f",
+            settings.app_env, settings.sentry_traces_sample_rate,
+        )
+    except ImportError:
+        logging.getLogger("denno.main").warning(
+            "[SENTRY] sentry-sdk not installed — skipping. "
+            "Run: pip install 'sentry-sdk[fastapi,celery]'"
+        )
+
+
 
 async def _daily_job_fetch_loop():
     """Background task running inside FastAPI that fetches real jobs daily (every 24 hours)."""

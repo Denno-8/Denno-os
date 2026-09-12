@@ -118,7 +118,7 @@ I welcome the opportunity to meet with your interview committee to discuss how m
 
 Yours faithfully,
 
-Dennis K
+Job Applicant
 Full-Stack Software Engineer`;
     setAppLetterText(letter);
   };
@@ -139,7 +139,7 @@ Attached, please find my updated ATS-formatted Resume PDF, formal Application Le
 Thank you for your time and consideration.
 
 Best regards,
-Dennis K
+Job Applicant
 Full-Stack Software Engineer`;
     setCoverLetter(letter);
   };
