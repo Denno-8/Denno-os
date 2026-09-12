@@ -131,6 +131,17 @@ class Settings(BaseSettings):
                     "JWT_SECRET is set to an insecure default. "
                     "Generate a strong secret: openssl rand -hex 32"
                 )
+            _INSECURE_DB_PASSWORDS = (
+                "password", "postgres", "admin", "denno_secure_password_2026",
+                "123456", "root", "secret", "change_me", "denno"
+            )
+            for weak_pass in _INSECURE_DB_PASSWORDS:
+                if f":{weak_pass}@" in self.database_url:
+                    raise ValueError(
+                        f"DATABASE_URL contains an insecure default password ('{weak_pass}'). "
+                        "Set a strong database password in your production environment."
+                    )
+
             if "localhost" in self.frontend_origin or "127.0.0.1" in self.frontend_origin:
                 raise ValueError(
                     "FRONTEND_ORIGIN is pointing to localhost in production. "
