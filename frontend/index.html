@@ -14,7 +14,7 @@
     <!-- Security meta tags (defence-in-depth; primary headers are set server-side) -->
     <!-- Fallback CSP — connect-src must allow the backend API origin in both development and production -->
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; object-src 'none'; frame-ancestors 'none';" />
+          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://denno-backend.onrender.com https://*.onrender.com https: http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*; object-src 'none'; frame-ancestors 'none';" />
     <!-- Prevent sending full URL to third-party sites -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
   </head>

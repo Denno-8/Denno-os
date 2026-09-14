@@ -67,7 +67,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # ── Content Security Policy ───────────────────────────────────────────
         connect_src = (
-            f"connect-src 'self' {settings.frontend_origin} https://*.vercel.app "
+            f"connect-src 'self' {settings.frontend_origin} https://*.vercel.app https://*.onrender.com "
             "http://localhost:* http://127.0.0.1:* ws://localhost:*"
         )
 

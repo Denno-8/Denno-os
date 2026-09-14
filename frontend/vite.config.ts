@@ -23,7 +23,7 @@ export default defineConfig({
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: https:",
-        "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*",
+        "connect-src 'self' https://denno-backend.onrender.com https://*.onrender.com https: http://localhost:8000 http://127.0.0.1:8000 ws://localhost:* ws://127.0.0.1:*",
         "object-src 'none'",
         "frame-ancestors 'none'",
       ].join("; "),
