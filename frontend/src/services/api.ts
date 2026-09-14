@@ -1,4 +1,7 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+const rawApiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").trim();
+export const API_URL = rawApiUrl.endsWith("/api/v1") 
+  ? rawApiUrl 
+  : `${rawApiUrl.replace(/\/+$/, "")}/api/v1`;
 
 /** Read the access token from sessionStorage (set by auth.service). */
 function getAccessToken(): string | null {
@@ -21,7 +24,7 @@ export class ApiError extends Error {
     const detailMsg =
       extractedDetail ||
       (status === 0
-        ? "Failed to connect to backend server on http://localhost:8000."
+        ? `Failed to connect to backend server at ${API_URL}.`
         : `API error ${status}`);
     super(detailMsg);
     this.name = "ApiError";
@@ -75,7 +78,7 @@ async function request<T>(
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(0, {
-      detail: "Failed to connect to Denno API. Please ensure the backend is running on http://localhost:8000.",
+      detail: `Failed to connect to Denno API at ${API_URL}. Please check network connection or backend status.`,
       message: err?.message || "Failed to fetch",
     });
   }
