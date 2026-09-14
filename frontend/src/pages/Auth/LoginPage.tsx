@@ -132,13 +132,6 @@ export default function LoginPage() {
   const submit = async () => {
     setError(null); setInfo(null); setLoading(true);
     try {
-      // If backend is still cold-booting, wait for it to wake up first
-      if (serverStatus !== "ready") {
-        setServerStatus("waking");
-        const isReady = await wakeBackend(60000);
-        if (isReady) setServerStatus("ready");
-      }
-
       if (mode === "login")    { await authService.login(email, password); navigate("/applications"); }
       else if (mode === "register") { await authService.register(email, password, firstName, lastName); navigate("/applications"); }
       else if (mode === "forgot")   { const r = await authService.requestPasswordReset(email); setInfo(r.message); }

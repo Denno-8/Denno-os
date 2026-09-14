@@ -39,12 +39,12 @@ export class ApiError extends Error {
  * Polls /health until Render free-tier instance finishes cold boot.
  * Tries every 2.5 seconds up to maxWaitMs (default 90 seconds).
  */
-export async function wakeBackend(maxWaitMs = 90000): Promise<boolean> {
+export async function wakeBackend(maxWaitMs = 60000): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < maxWaitMs) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
+      const timer = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(`${BASE_URL}/health`, {
         signal: controller.signal,
         cache: "no-store",
@@ -52,9 +52,9 @@ export async function wakeBackend(maxWaitMs = 90000): Promise<boolean> {
       clearTimeout(timer);
       if (res.ok) return true;
     } catch {
-      // Render free tier is still spinning up container — wait 2.5s and poll again
+      // Render free tier is spinning up container — poll every 1.5s
     }
-    await new Promise((r) => setTimeout(r, 2500));
+    await new Promise((r) => setTimeout(r, 1500));
   }
   return false;
 }
