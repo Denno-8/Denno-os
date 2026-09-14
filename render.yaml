@@ -1,0 +1,90 @@
+
+# render.yaml — Denno Career OS · Render Blueprint
+# ──────────────────────────────────────────────────────────────────────────────
+# Deploy everything in one click from the Render dashboard:
+#   https://dashboard.render.com/select-repo → "Use a Blueprint"
+#
+# Services provisioned:
+#   • denno-backend  — FastAPI (Python 3.12, Docker)
+#   • denno-db       — PostgreSQL 16
+#   • denno-redis    — Redis 7
+# ──────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: denno-db
+    databaseName: denno
+    user: denno_user
+    plan: free          # Upgrade to starter/standard for persistent storage
+
+services:
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  - type: web
+    name: denno-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.backend
+    dockerContext: .
+    plan: free          # Upgrade for always-on (free tier sleeps after 15 min idle)
+    healthCheckPath: /health
+    autoDeploy: true
+
+    envVars:
+      # ── App
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO
+
+      # ── Database — auto-wired from the database above
+      - key: DATABASE_URL
+        fromDatabase:
+          name: denno-db
+          property: connectionString
+        # Render gives a postgres:// URL; SQLAlchemy asyncpg needs postgresql+asyncpg://
+        # This is handled by the start command below.
+
+      # ── Redis — auto-wired from the Redis service below
+      - key: REDIS_URL
+        fromService:
+          name: denno-redis
+          type: redis
+          property: connectionString
+
+      # ── Security (CHANGE THESE — generate with: openssl rand -hex 32)
+      - key: JWT_SECRET
+        generateValue: true   # Render auto-generates a secure random value
+      - key: COOKIE_SECURE
+        value: true
+
+      # ── CORS — set to your Vercel frontend URL
+      - key: FRONTEND_ORIGIN
+        value: https://denno-luv9egm9c-denno-8s-projects.vercel.app
+
+      # ── Allowed hosts — Render will assign a *.onrender.com subdomain
+      # Update this after first deploy with your actual Render URL
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com,localhost"
+
+      # ── AI (optional — add your key in Render dashboard)
+      - key: ANTHROPIC_API_KEY
+        value: ""
+
+      # ── Email (optional)
+      - key: EMAILS_ENABLED
+        value: false
+
+    # Render doesn't auto-convert postgres:// → postgresql+asyncpg://
+    # This start command patches the URL at runtime before launching uvicorn.
+    startCommand: >-
+      sh -c '
+      export DATABASE_URL=$(echo "$DATABASE_URL" | sed "s|postgres://|postgresql+asyncpg://|");
+      alembic upgrade head;
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      '
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  - type: redis
+    name: denno-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

@@ -7,7 +7,10 @@ import {
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { authService } from "../../services/auth.service";
-import { ApiError } from "../../services/api";
+import { ApiError, API_URL } from "../../services/api";
+
+// Derive base URL (without /api/v1) for OAuth redirects
+const BACKEND_BASE = API_URL.replace(/\/api\/v1\/?$/, "");
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
@@ -377,7 +380,7 @@ export default function LoginPage() {
             <div style={{ marginBottom:"16px" }}>
               {/* Google */}
               <button id="btn-google-oauth"
-                onClick={() => { window.location.href = "http://localhost:8000/api/v1/auth/google/login"; }}
+                onClick={() => { window.location.href = `${API_URL}/auth/google/login`; }}
                 style={{ width:"100%", padding:"12px 16px", borderRadius:"12px", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px", fontFamily:FONT, fontSize:"14.5px", fontWeight:700, cursor:"pointer", border:`1.5px solid ${dark ? "rgba(255,255,255,0.15)" : "#cbd5e1"}`, background: dark ? "rgba(255,255,255,0.04)" : "#fff", color: dark ? "#f8fafc" : "#1e293b", marginBottom:"10px", transition:"all 0.2s", boxShadow: dark ? "none" : "0 1px 4px rgba(0,0,0,0.06)" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor="#3b82f6"; e.currentTarget.style.background = dark ? "rgba(59,130,246,0.08)" : "#f8faff"; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = dark ? "rgba(255,255,255,0.15)" : "#cbd5e1"; e.currentTarget.style.background = dark ? "rgba(255,255,255,0.04)" : "#fff"; }}
@@ -387,7 +390,7 @@ export default function LoginPage() {
 
               {/* LinkedIn */}
               <button id="btn-linkedin-oauth"
-                onClick={() => { window.location.href = "http://localhost:8000/api/v1/auth/linkedin/login"; }}
+                onClick={() => { window.location.href = `${API_URL}/auth/linkedin/login`; }}
                 style={{ width:"100%", padding:"12px 16px", borderRadius:"12px", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px", fontFamily:FONT, fontSize:"14.5px", fontWeight:700, cursor:"pointer", border:"none", background:"linear-gradient(135deg,#0077b5,#005885)", color:"#fff", marginBottom:"16px", boxShadow:"0 4px 16px rgba(0,119,181,0.28)", transition:"all 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.transform="translateY(-1px)"; e.currentTarget.style.boxShadow="0 6px 20px rgba(0,119,181,0.38)"; }}
                 onMouseLeave={e => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 4px 16px rgba(0,119,181,0.28)"; }}
