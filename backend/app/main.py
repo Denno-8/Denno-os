@@ -138,24 +138,20 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(AuditLoggerMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# In production, only allow the configured FRONTEND_ORIGIN. The localhost
-# regex is gated to development mode to avoid accidentally remaining open.
-_extra_origins: list[str] = []
-_allow_regex: str | None = None
-
-if settings.app_env != "production":
-    _extra_origins = [
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175",
-        "http://localhost:5176",
-        "http://127.0.0.1:5173",
-    ]
-    _allow_regex = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
+# Allow configured FRONTEND_ORIGIN, all Vercel preview/prod domains (*.vercel.app),
+# and local development origins.
+_extra_origins: list[str] = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5173",
+]
+_allow_regex = r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1)(:\d+)?"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, *_extra_origins],
+    allow_origins=[settings.frontend_origin, *_extra_origins] if settings.frontend_origin else _extra_origins,
     allow_origin_regex=_allow_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
