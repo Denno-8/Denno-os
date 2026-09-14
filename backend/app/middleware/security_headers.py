@@ -37,9 +37,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Prevent Flash/PDF cross-domain reads.
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
 
-        # Prevent the page from opening other pages that retain a reference
-        # back (Spectre / side-channel mitigation).
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        # Allow popups and cross-origin navigations for OAuth and SPA API calls.
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
 
         # Allow cross-origin requests from the frontend SPA (CORS policy manages allowed origins).
         response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
@@ -67,15 +66,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
 
         # ── Content Security Policy ───────────────────────────────────────────
-        # Production restricts connect-src to only the real frontend origin;
-        # development keeps localhost/WS for Vite HMR.
-        if _IS_PROD:
-            connect_src = f"connect-src 'self' {settings.frontend_origin}"
-        else:
-            connect_src = (
-                f"connect-src 'self' {settings.frontend_origin} "
-                "http://localhost:* http://127.0.0.1:* ws://localhost:*"
-            )
+        connect_src = (
+            f"connect-src 'self' {settings.frontend_origin} https://*.vercel.app "
+            "http://localhost:* http://127.0.0.1:* ws://localhost:*"
+        )
 
         csp_directives = [
             "default-src 'self'",

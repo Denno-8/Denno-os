@@ -146,27 +146,16 @@ REFRESH_COOKIE_NAME = "denno_refresh_token"
 
 
 def set_refresh_cookie(response, refresh_token: str) -> None:
-    """
-    Store the refresh token in an httpOnly cookie instead of the JSON body.
-
-    Security properties:
-    - httpOnly: JavaScript cannot read it — XSS cannot steal the refresh token.
-    - SameSite=Lax: CSRF protection while allowing top-level navigations.
-    - Secure: Only sent over HTTPS (enforced in production via settings.cookie_secure).
-    - Path=/api/v1/auth: Scoped so the cookie is only sent to auth endpoints.
-
-    The access token stays in the JSON body (and short-lived sessionStorage on
-    the client), so the SPA can still read it to decode role/sub without a
-    server round-trip.
-    """
     from app.core.config import settings
     max_age = settings.refresh_token_expire_days * 86_400  # seconds
+    # Use SameSite=None when Secure is true (required for cross-domain API <-> SPA)
+    samesite_val = "none" if settings.cookie_secure else "lax"
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=samesite_val,
         max_age=max_age,
         path="/api/v1/auth",
     )
@@ -174,10 +163,12 @@ def set_refresh_cookie(response, refresh_token: str) -> None:
 
 def clear_refresh_cookie(response) -> None:
     """Expire the refresh-token cookie on logout."""
+    from app.core.config import settings
+    samesite_val = "none" if settings.cookie_secure else "lax"
     response.delete_cookie(
         key=REFRESH_COOKIE_NAME,
         path="/api/v1/auth",
         httponly=True,
-        secure=False,  # delete_cookie works regardless of Secure flag
-        samesite="lax",
+        secure=settings.cookie_secure,
+        samesite=samesite_val,
     )
