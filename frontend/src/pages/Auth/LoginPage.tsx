@@ -110,8 +110,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     setTimeout(() => setMounted(true), 60);
-    // Pre-warm Render free-tier backend on page load so it's ready when the user clicks Sign In
-    wakeBackend(60000).then((ok) => setServerStatus(ok ? "ready" : "unknown"));
+    // Pre-warm Render free-tier backend on page load via polling loop
+    wakeBackend(90000).then((ok) => setServerStatus(ok ? "ready" : "unknown"));
   }, []);
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setInfo(null); };
@@ -122,16 +122,23 @@ export default function LoginPage() {
       if (err.status === 401) setError("Invalid email or password. Please try again.");
       else if (err.status === 409) setError("An account with this email already exists. Try signing in.");
       else if (err.status === 422) setError("Please check your inputs — some fields are invalid.");
-      else if (err.status === 0) setError("The server is still starting up. Please wait a few seconds and try again.");
+      else if (err.status === 0) setError("Server cold start timeout. Please wait a moment and try again.");
       else setError(typeof d === "string" ? d : fallback);
     } else {
-      setError("The server is starting up. Please wait a moment and try again.");
+      setError("Server cold start in progress. Please wait a moment and try again.");
     }
   };
 
   const submit = async () => {
     setError(null); setInfo(null); setLoading(true);
     try {
+      // If backend is still cold-booting, wait for it to wake up first
+      if (serverStatus !== "ready") {
+        setServerStatus("waking");
+        const isReady = await wakeBackend(60000);
+        if (isReady) setServerStatus("ready");
+      }
+
       if (mode === "login")    { await authService.login(email, password); navigate("/applications"); }
       else if (mode === "register") { await authService.register(email, password, firstName, lastName); navigate("/applications"); }
       else if (mode === "forgot")   { const r = await authService.requestPasswordReset(email); setInfo(r.message); }

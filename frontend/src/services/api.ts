@@ -36,29 +36,33 @@ export class ApiError extends Error {
 }
 
 /**
- * Ping /health to wake up a sleeping Render free-tier instance.
- * Call this on page load to pre-warm the backend before the user clicks Sign In.
+ * Polls /health until Render free-tier instance finishes cold boot.
+ * Tries every 2.5 seconds up to maxWaitMs (default 90 seconds).
  */
-export async function wakeBackend(timeoutMs = 60000): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${BASE_URL}/health`, {
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    return res.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
+export async function wakeBackend(maxWaitMs = 90000): Promise<boolean> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`${BASE_URL}/health`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      clearTimeout(timer);
+      if (res.ok) return true;
+    } catch {
+      // Render free tier is still spinning up container — wait 2.5s and poll again
+    }
+    await new Promise((r) => setTimeout(r, 2500));
   }
+  return false;
 }
 
 /** Attempt a silent token refresh using the httpOnly cookie. */
 async function tryRefresh(): Promise<boolean> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
@@ -118,15 +122,17 @@ async function request<T>(
 
   let res: Response;
   try {
-    // 60-second timeout — covers Render free-tier cold starts (typically 30–50 s)
+    // 60-second timeout per attempt
     res = await fetchWithTimeout(`${API_URL}${path}`, reqOptions, 60000);
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
 
-    // On first failure, wait 3 s then retry once — handles transient cold-start errors
+    // On network failure (cold boot connection reset), wake backend actively then retry once
     if (!_isRetry) {
-      await new Promise((r) => setTimeout(r, 3000));
-      return request<T>(path, options, true);
+      const awake = await wakeBackend(45000);
+      if (awake) {
+        return request<T>(path, options, true);
+      }
     }
 
     throw new ApiError(0, {
@@ -136,7 +142,7 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    // Silent 401 → refresh → retry
+    // Silent 401 -> refresh -> retry
     if (
       res.status === 401 &&
       !_isRetry &&
