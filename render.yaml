@@ -41,12 +41,9 @@ services:
           name: denno-db
           property: connectionString
 
-      # ── Redis — auto-wired from the Redis service below
+      # ── Redis (Paste URL from existing Render Redis or Upstash)
       - key: REDIS_URL
-        fromService:
-          name: denno-redis
-          type: redis
-          property: connectionString
+        sync: false
 
       # ── Security
       - key: JWT_SECRET
@@ -69,10 +66,3 @@ services:
       # ── Email
       - key: EMAILS_ENABLED
         value: false
-
-  # ── Redis ───────────────────────────────────────────────────────────────────
-  - type: redis
-    name: denno-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []    # Empty = only accessible from other Render services (internal only)
