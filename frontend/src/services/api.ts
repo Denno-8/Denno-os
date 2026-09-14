@@ -1,7 +1,10 @@
 const rawApiUrl = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").trim();
-export const API_URL = rawApiUrl.endsWith("/api/v1") 
-  ? rawApiUrl 
+export const API_URL = rawApiUrl.endsWith("/api/v1")
+  ? rawApiUrl
   : `${rawApiUrl.replace(/\/+$/, "")}/api/v1`;
+
+// Base URL without /api/v1 (used for /health ping)
+const BASE_URL = API_URL.replace(/\/api\/v1\/?$/, "");
 
 /** Read the access token from sessionStorage (set by auth.service). */
 function getAccessToken(): string | null {
@@ -24,7 +27,7 @@ export class ApiError extends Error {
     const detailMsg =
       extractedDetail ||
       (status === 0
-        ? `Failed to connect to backend server at ${API_URL}.`
+        ? `Cannot reach backend at ${API_URL}. The server may be starting up — please wait a moment and try again.`
         : `API error ${status}`);
     super(detailMsg);
     this.name = "ApiError";
@@ -32,14 +35,38 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Ping /health to wake up a sleeping Render free-tier instance.
+ * Call this on page load to pre-warm the backend before the user clicks Sign In.
+ */
+export async function wakeBackend(timeoutMs = 60000): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE_URL}/health`, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Attempt a silent token refresh using the httpOnly cookie. */
 async function tryRefresh(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
-      credentials: "include", // sends the httpOnly refresh-token cookie
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) return false;
     const data = await res.json();
     if (data.access_token) {
@@ -48,6 +75,7 @@ async function tryRefresh(): Promise<boolean> {
     }
     return false;
   } catch {
+    clearTimeout(timer);
     return false;
   }
 }
@@ -59,36 +87,56 @@ function redirectToLogin() {
   }
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   _isRetry = false,
 ): Promise<T> {
+  const reqOptions: RequestInit = {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+      ...(options.headers ?? {}),
+    },
+  };
+
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      credentials: "include", // always include — needed for the httpOnly refresh cookie
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeader(),
-        ...(options.headers ?? {}),
-      },
-    });
+    // 60-second timeout — covers Render free-tier cold starts (typically 30–50 s)
+    res = await fetchWithTimeout(`${API_URL}${path}`, reqOptions, 60000);
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
+
+    // On first failure, wait 3 s then retry once — handles transient cold-start errors
+    if (!_isRetry) {
+      await new Promise((r) => setTimeout(r, 3000));
+      return request<T>(path, options, true);
+    }
+
     throw new ApiError(0, {
-      detail: `Failed to connect to Denno API at ${API_URL}. Please check network connection or backend status.`,
-      message: err?.message || "Failed to fetch",
+      detail: `Cannot reach backend at ${API_URL}. The server may still be starting up — please wait a moment and try again.`,
+      message: err?.message ?? "Failed to fetch",
     });
   }
 
   if (!res.ok) {
-    // ── Silent refresh on 401 ────────────────────────────────────────────────
-    // On any 401 (except login/register/refresh themselves), attempt one
-    // automatic token refresh before giving up. This handles the common case
-    // where the access token expires mid-session; the user never sees a
-    // redirect unless the refresh token is also expired or revoked.
+    // Silent 401 → refresh → retry
     if (
       res.status === 401 &&
       !_isRetry &&
@@ -97,17 +145,16 @@ async function request<T>(
       !path.includes("/auth/refresh")
     ) {
       const refreshed = await tryRefresh();
-      if (refreshed) {
-        // Retry the original request with the new access token.
-        return request<T>(path, options, true);
-      }
+      if (refreshed) return request<T>(path, options, true);
       redirectToLogin();
     }
 
     let body: unknown = null;
     try {
       body = await res.json();
-    } catch { /* no body */ }
+    } catch {
+      /* no body */
+    }
     throw new ApiError(res.status, body);
   }
 
@@ -127,4 +174,3 @@ export const api = {
 };
 
 export default api;
-

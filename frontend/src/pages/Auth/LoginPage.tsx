@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { authService } from "../../services/auth.service";
-import { ApiError, API_URL } from "../../services/api";
+import { ApiError, API_URL, wakeBackend } from "../../services/api";
 
 // Derive base URL (without /api/v1) for OAuth redirects
 const BACKEND_BASE = API_URL.replace(/\/api\/v1\/?$/, "");
@@ -105,9 +105,14 @@ export default function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [serverStatus, setServerStatus] = useState<"waking" | "ready" | "unknown">("waking");
   const navigate = useNavigate();
 
-  useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
+  useEffect(() => {
+    setTimeout(() => setMounted(true), 60);
+    // Pre-warm Render free-tier backend on page load so it's ready when the user clicks Sign In
+    wakeBackend(60000).then((ok) => setServerStatus(ok ? "ready" : "unknown"));
+  }, []);
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setInfo(null); };
 
@@ -117,9 +122,10 @@ export default function LoginPage() {
       if (err.status === 401) setError("Invalid email or password. Please try again.");
       else if (err.status === 409) setError("An account with this email already exists. Try signing in.");
       else if (err.status === 422) setError("Please check your inputs — some fields are invalid.");
+      else if (err.status === 0) setError("The server is still starting up. Please wait a few seconds and try again.");
       else setError(typeof d === "string" ? d : fallback);
     } else {
-      setError("Cannot connect to the server. Please ensure the backend is running on port 8000.");
+      setError("The server is starting up. Please wait a moment and try again.");
     }
   };
 
@@ -459,6 +465,20 @@ export default function LoginPage() {
                   </button>
                 </div>
               </>
+            )}
+
+            {/* Server wake-up status */}
+            {serverStatus === "waking" && !error && (
+              <div style={{ padding:"9px 14px", borderRadius:"12px", background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.3)", display:"flex", gap:"8px", alignItems:"center" }}>
+                <div style={{width:"12px",height:"12px",border:"2px solid rgba(251,191,36,0.3)",borderTopColor:"#fbbf24",borderRadius:"50%",animation:"spin 0.8s linear infinite",flexShrink:0}} />
+                <span style={{ fontSize:"12.5px", fontWeight:600, color:"#d97706", lineHeight:1.5 }}>Waking up server… this takes ~30 s on first load</span>
+              </div>
+            )}
+            {serverStatus === "ready" && !error && !loading && (
+              <div style={{ padding:"8px 14px", borderRadius:"12px", background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", display:"flex", gap:"8px", alignItems:"center" }}>
+                <CheckCircle2 size={14} style={{color:"#10b981",flexShrink:0}} />
+                <span style={{ fontSize:"12.5px", fontWeight:600, color:"#059669" }}>Server ready ✓</span>
+              </div>
             )}
 
             {/* Alerts */}
