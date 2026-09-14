@@ -39,17 +39,30 @@ target_metadata = Base.metadata
 
 
 def _get_db_url() -> str:
-    """Return DATABASE_URL from app settings, overriding alembic.ini value."""
+    """Return DATABASE_URL from app settings, overriding alembic.ini value.
+
+    Normalises the scheme so both postgres:// (Render's raw URL) and
+    postgresql+asyncpg:// (SQLAlchemy asyncpg driver) are handled correctly.
+    """
     try:
         import sys
         from pathlib import Path
         # Make sure the backend/ package is on sys.path
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from app.core.config import settings
-        return settings.database_url
+        url = settings.database_url
     except Exception:
         # Fall back to the URL in alembic.ini if settings can't be loaded
-        return config.get_main_option("sqlalchemy.url")
+        url = config.get_main_option("sqlalchemy.url")
+
+    # Render provides postgres:// — asyncpg requires postgresql+asyncpg://
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    # Also handle plain postgresql:// (no driver specified)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    return url
 
 
 def run_migrations_offline() -> None:

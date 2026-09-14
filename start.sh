@@ -5,10 +5,14 @@
 set -e
 
 # Render provides DATABASE_URL as postgres://... but SQLAlchemy asyncpg needs postgresql+asyncpg://
-export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's|postgres://|postgresql+asyncpg://|')
+# Export immediately so ALL subsequent Python processes (alembic, uvicorn) see the patched URL.
+export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's|postgres://|postgresql+asyncpg://|g')
 
+echo "[start.sh] DATABASE_URL scheme: $(echo $DATABASE_URL | cut -d: -f1)"
 echo "[start.sh] Running database migrations..."
-alembic upgrade head
+
+# alembic.ini lives inside backend/ which is mounted at /app
+cd /app && alembic -c alembic.ini upgrade head
 
 echo "[start.sh] Starting Uvicorn..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
