@@ -164,6 +164,17 @@ app.include_router(api_router)
 app.include_router(metrics_router)
 
 
+@app.get("/", tags=["System"])
+async def root():
+    return {
+        "name": "Denno API",
+        "status": "online",
+        "version": "0.1.0",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health", tags=["System"])
 async def health():
     return {"status": "ok"}
