@@ -185,9 +185,9 @@ async def readiness():
     except Exception:
         pass
     try:
-        await get_redis().ping()
+        await asyncio.wait_for(get_redis().ping(), timeout=1.0)
         redis_ok = True
     except Exception:
         pass
 
-    return {"postgres": pg_ok, "redis": redis_ok, "ready": pg_ok and redis_ok}
+    return {"postgres": pg_ok, "redis": redis_ok, "ready": pg_ok}

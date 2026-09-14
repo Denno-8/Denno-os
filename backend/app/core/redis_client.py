@@ -14,11 +14,13 @@ _client: redis.Redis | None = None
 def get_redis() -> redis.Redis:
     global _client
     if _client is None:
+        url = settings.redis_url or "redis://localhost:6379/0"
         _client = redis.from_url(
-            settings.redis_url,
+            url,
             decode_responses=True,
             socket_connect_timeout=0.5,
             socket_timeout=0.5,
+            retry_on_timeout=False,
         )
     return _client
 
