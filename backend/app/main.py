@@ -154,8 +154,8 @@ app.add_middleware(
     allow_origins=[settings.frontend_origin, *_extra_origins] if settings.frontend_origin else _extra_origins,
     allow_origin_regex=_allow_regex,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 from app.api.metrics import router as metrics_router

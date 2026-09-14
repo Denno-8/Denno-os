@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=60, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     # Comma-separated trusted hostnames; split into list at validation time.
-    allowed_hosts_raw: str = Field(default="localhost,127.0.0.1", alias="ALLOWED_HOSTS")
+    allowed_hosts_raw: str = Field(default="*,localhost,127.0.0.1,.onrender.com", alias="ALLOWED_HOSTS")
     # True in production so the refresh-token httpOnly cookie uses Secure flag.
     cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
     # Cloudflare Turnstile secret key — verified on /register AND /login when set.
