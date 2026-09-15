@@ -19,6 +19,9 @@ export interface PaginatedUsers {
   skip: number;
   limit: number;
   has_more: boolean;
+  items?: AdminUser[];
+  page?: number;
+  total_pages?: number;
 }
 
 export interface AdminJob {

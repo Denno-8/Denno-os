@@ -4,6 +4,7 @@ import {
   TrendingUp, Award, Activity, Target
 } from "lucide-react";
 import { useAdminAnalytics, useAdminUsers } from "../../hooks/useAdmin";
+import type { AdminUser } from "../../types/admin.types";
 
 function MetricCard({
   label, value, icon, color = "blue", sub
@@ -35,9 +36,10 @@ function MetricCard({
 export default function AdminDashboard() {
   const { data: analytics, isLoading } = useAdminAnalytics();
   const { data: usersData } = useAdminUsers();
-  const userList = Array.isArray(usersData)
-    ? usersData
-    : (usersData?.items ?? usersData?.users ?? []);
+  const rawUsers = usersData as any;
+  const userList: AdminUser[] = Array.isArray(rawUsers)
+    ? rawUsers
+    : (rawUsers?.items ?? rawUsers?.users ?? []);
 
   const admins = userList.filter(u => u.role === "admin").length;
   const regularUsers = userList.filter(u => u.role === "user").length;
