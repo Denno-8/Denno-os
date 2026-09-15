@@ -14,6 +14,7 @@ class CalendarEventRepository:
         event = CalendarEvent(**data)
         self.session.add(event)
         await self.session.flush()
+        await self.session.commit()
         return event
 
     async def get(self, event_id: int, user_id: int) -> CalendarEvent | None:
@@ -38,7 +39,6 @@ class CalendarEventRepository:
         result = await self.session.execute(query)
         return result.scalars().all()
 
-
     async def update(self, event_id: int, user_id: int, data: dict) -> CalendarEvent | None:
         """Update calendar event fields."""
         event = await self.get(event_id, user_id)
@@ -47,6 +47,7 @@ class CalendarEventRepository:
                 if hasattr(event, key) and key not in ("id", "created_at", "user_id"):
                     setattr(event, key, value)
             await self.session.flush()
+            await self.session.commit()
         return event
 
     async def delete(self, event_id: int, user_id: int) -> bool:
@@ -55,5 +56,6 @@ class CalendarEventRepository:
         if event:
             await self.session.delete(event)
             await self.session.flush()
+            await self.session.commit()
             return True
         return False
