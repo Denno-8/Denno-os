@@ -360,10 +360,19 @@ export default function AdminUsersPage() {
   const skip = page * PAGE_SIZE;
   const { data, isLoading, isFetching, refetch } = useAdminUsers(q, roleFilter, statusFilter, skip, PAGE_SIZE);
 
-  const users = data?.users ?? [];
-  const total = data?.total ?? 0;
-  const hasMore = data?.has_more ?? false;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const users: AdminUser[] = Array.isArray(data)
+    ? data
+    : (data?.items ?? data?.users ?? []);
+
+  const total = Array.isArray(data)
+    ? data.length
+    : (data?.total ?? users.length);
+
+  const hasMore = Array.isArray(data)
+    ? false
+    : (data?.has_more ?? (data?.page !== undefined && data.page < (data?.total_pages ?? 1)));
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const updateRole = useUpdateUserRole();
   const suspendUser = useSuspendUser();

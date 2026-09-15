@@ -35,7 +35,9 @@ function MetricCard({
 export default function AdminDashboard() {
   const { data: analytics, isLoading } = useAdminAnalytics();
   const { data: usersData } = useAdminUsers();
-  const userList = usersData?.items ?? [];
+  const userList = Array.isArray(usersData)
+    ? usersData
+    : (usersData?.items ?? usersData?.users ?? []);
 
   const admins = userList.filter(u => u.role === "admin").length;
   const regularUsers = userList.filter(u => u.role === "user").length;
