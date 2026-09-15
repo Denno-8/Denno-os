@@ -5,6 +5,8 @@ export interface CalendarEvent {
   date: string;
   time: string;
   color: string;
+  location?: string;
+  description?: string;
   application_id: string | null;
   created_at: string;
 }
@@ -15,6 +17,8 @@ export interface CalendarEventCreateInput {
   date: string;
   time?: string;
   color?: string;
+  location?: string;
+  description?: string;
 }
 
 export const EVENT_TYPES = ["Interview", "Assessment", "Deadline", "Task", "Learning", "Reminder"];

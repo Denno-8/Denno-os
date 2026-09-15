@@ -6,9 +6,14 @@ export const API_URL = rawApiUrl.endsWith("/api/v1")
 // Base URL without /api/v1 (used for /health ping)
 const BASE_URL = API_URL.replace(/\/api\/v1\/?$/, "");
 
-/** Read the access token from sessionStorage (set by auth.service). */
-function getAccessToken(): string | null {
-  return sessionStorage.getItem("denno_access_token");
+/** Read the access token from sessionStorage/localStorage. */
+export function getAccessToken(): string {
+  return (
+    sessionStorage.getItem("denno_access_token") ||
+    localStorage.getItem("denno_access_token") ||
+    localStorage.getItem("token") ||
+    ""
+  );
 }
 
 function authHeader(): Record<string, string> {

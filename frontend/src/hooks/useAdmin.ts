@@ -47,7 +47,11 @@ export function useUpdateUserRole() {
   return useMutation({
     mutationFn: ({ id, role }: { id: number; role: string }) =>
       adminService.updateRole(id, role),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      // Also refresh current user data in case the promoted user later re-opens their session
+      qc.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
   });
 }
 
@@ -79,7 +83,10 @@ export function usePromoteByEmail() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (email: string) => adminService.promoteByEmail(email),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      qc.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
   });
 }
 

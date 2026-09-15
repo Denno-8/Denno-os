@@ -44,6 +44,16 @@ class PortalAutofillService:
             f"Experienced {job_info['title']} with strong expertise in full-stack software development, cloud infrastructure, and API architecture."
         )
 
+        highest_edu = "Bachelor of Science in Information Security and Forensics"
+        institution = "Jomo Kenyatta University of Agriculture and Technology (JKUAT)"
+        if user_obj and user_obj.education and isinstance(user_obj.education, list) and len(user_obj.education) > 0:
+            edu0 = user_obj.education[0]
+            if isinstance(edu0, dict):
+                highest_edu = edu0.get("degree") or highest_edu
+                institution = edu0.get("school") or institution
+
+        current_role = user_obj.title if user_obj and user_obj.title else "Full-Stack Software Engineer"
+
         payload = {
             "first_name": first_name,
             "last_name": last_name,
@@ -57,6 +67,11 @@ class PortalAutofillService:
             "github_url": github,
             "website_url": user_obj.website if user_obj and user_obj.website else github,
             "years_experience": user_obj.years_experience if user_obj and user_obj.years_experience else 4,
+            "current_role": current_role,
+            "highest_education": highest_edu,
+            "institution": institution,
+            "id_number": "38491024",
+            "kra_pin": "A019283471K",
             "notice_period": user_obj.notice_period if user_obj and user_obj.notice_period else "Immediate / 2 Weeks",
             "salary_expectation": f"{user_obj.currency if user_obj else 'KES'} {user_obj.salary_min if user_obj else 200000}",
             "work_authorization": "Authorized to work (Kenyan Citizen / Remote)",
@@ -65,7 +80,7 @@ class PortalAutofillService:
             "cv_title": latest_cv.name if latest_cv else "Tailored_Software_Engineer_CV.pdf"
         }
 
-        # Generate Browser Console Auto-Fill Bookmarklet Script
+        # Generate Browser Console Auto-Fill Bookmarklet Script for Greenhouse, Lever, Workday, Safaricom & Taleo
         bookmarklet_code = f"""javascript:(function(){{
             var p = {json.dumps(payload)};
             function fill(sel, val) {{
@@ -79,12 +94,16 @@ class PortalAutofillService:
             fill('input[name*="last"], input[id*="last"], input[autocomplete*="family-name"]', p.last_name);
             fill('input[type="email"], input[name*="email"], input[id*="email"]', p.email);
             fill('input[type="tel"], input[name*="phone"], input[id*="phone"]', p.phone);
-            fill('input[name*="location"], input[name*="city"], input[id*="location"]', p.location);
+            fill('input[name*="location"], input[name*="city"], input[id*="location"], input[name*="address"]', p.location);
             fill('input[name*="linkedin"], input[id*="linkedin"]', p.linkedin_url);
             fill('input[name*="github"], input[id*="github"]', p.github_url);
             fill('input[name*="website"], input[id*="website"], input[name*="portfolio"]', p.website_url);
+            fill('input[name*="school"], input[name*="university"], input[name*="institution"]', p.institution);
+            fill('input[name*="degree"], input[name*="education"], input[name*="qualification"]', p.highest_education);
+            fill('input[name*="id_number"], input[name*="national_id"], input[name*="passport"]', p.id_number);
+            fill('input[name*="kra"], input[name*="tax_pin"], input[name*="pin"]', p.kra_pin);
             fill('textarea[name*="summary"], textarea[id*="summary"], textarea[name*="cover"]', p.summary);
-            alert('✦ Auto-filled candidate profile fields for ' + p.full_name + '!');
+            alert('✦ Auto-filled application fields for ' + p.full_name + '!');
         }})();"""
 
         return {

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSEO } from "../../hooks/useSEO";
 import {
   Target, Bot, BarChart3, Bell, User, Mail, Lock,
   KeyRound, AlertTriangle, CheckCircle2, ArrowRight,
@@ -84,6 +86,11 @@ const FEATURES = [
 const FONT = "'Plus Jakarta Sans', Inter, ui-sans-serif, system-serif";
 
 export default function LoginPage() {
+  useSEO({
+    title: "Sign In — Denno Career OS",
+    description: "Log in to Denno, the AI-powered career management platform for Kenyan and African professionals. Track applications, build CVs, and apply smarter.",
+    canonical: "https://denno.app/login",
+  });
   const { theme, toggleTheme } = useTheme();
   const dark = theme === "dark";
   const [mode, setMode] = useState<Mode>("login");
@@ -107,6 +114,7 @@ export default function LoginPage() {
   const [mounted, setMounted] = useState(false);
   const [serverStatus, setServerStatus] = useState<"waking" | "ready" | "unknown">("waking");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     setTimeout(() => setMounted(true), 60);
@@ -132,8 +140,8 @@ export default function LoginPage() {
   const submit = async () => {
     setError(null); setInfo(null); setLoading(true);
     try {
-      if (mode === "login")    { await authService.login(email, password); navigate("/applications"); }
-      else if (mode === "register") { await authService.register(email, password, firstName, lastName); navigate("/applications"); }
+      if (mode === "login")    { await authService.login(email, password); queryClient.clear(); navigate("/applications"); }
+      else if (mode === "register") { await authService.register(email, password, firstName, lastName); queryClient.clear(); navigate("/applications"); }
       else if (mode === "forgot")   { const r = await authService.requestPasswordReset(email); setInfo(r.message); }
       else if (mode === "reset")    { const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login"); }
     } catch (e) { handleApiError(e, "Something went wrong. Check your details."); }

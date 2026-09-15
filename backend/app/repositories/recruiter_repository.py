@@ -15,13 +15,13 @@ class RecruiterRepository:
         await self.session.flush()
         return recruiter
 
-    async def list_for_user(self, user_id: int, company: str | None = None) -> list[Recruiter]:
-        """List recruiters for a user, optionally filtered by company."""
+    async def list_for_user(self, user_id: int, strength: str | None = None) -> list[Recruiter]:
+        """List recruiters for a user, optionally filtered by relationship strength."""
         query = select(Recruiter).where(Recruiter.user_id == user_id)
-        
-        if company and company != "All":
-            query = query.where(Recruiter.company == company)
-        
+
+        if strength and strength != "All":
+            query = query.where(Recruiter.relationship_strength == strength)
+
         query = query.order_by(Recruiter.updated_at.desc())
         result = await self.session.execute(query)
         return result.scalars().all()

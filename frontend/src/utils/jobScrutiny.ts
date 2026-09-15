@@ -59,6 +59,16 @@ export function analyzeJobApplicationChannel(item: {
 
   const hasEmailPhrase = emailPhrases.some((phrase) => descText.toLowerCase().includes(phrase));
 
+  if (item.apply_method === "website" || item.apply_method === "portal") {
+    return {
+      channel: "website",
+      targetEmail: finalEmail,
+      portalUrl,
+      reason: "Official Web Application Portal selected for online submission.",
+      isEmailVerified: false,
+    };
+  }
+
   if (item.apply_method === "email" || finalEmail || hasEmailPhrase) {
     return {
       channel: "email",
@@ -68,16 +78,6 @@ export function analyzeJobApplicationChannel(item: {
         ? `Direct Email Application required by employer (Recipient: ${finalEmail})`
         : "Email application instructions detected in job description.",
       isEmailVerified: !!finalEmail && !finalEmail.includes("example.com"),
-    };
-  }
-
-  if (portalUrl && portalUrl.startsWith("http")) {
-    return {
-      channel: "website",
-      targetEmail: "",
-      portalUrl,
-      reason: "Official Web Application Portal detected for online submission.",
-      isEmailVerified: false,
     };
   }
 

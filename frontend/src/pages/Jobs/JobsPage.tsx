@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useSEO } from "../../hooks/useSEO";
 import { useQuery } from "@tanstack/react-query";
 import ApiErrorCard from "../../components/ApiErrorCard";
 import {
@@ -23,6 +24,7 @@ import { jobsService } from "../../services/jobs.service";
 import type { Job } from "../../types/job.types";
 
 export default function JobsPage() {
+  useSEO({ title: "Job Listings — Denno Career OS", description: "Browse AI-curated job listings matched to your profile. Filter by role, level, and match score.", noIndex: true });
   const [q, setQ] = useState("");
   const [mode, setMode] = useState("All");
   const [level, setLevel] = useState("All");

@@ -87,9 +87,10 @@ class ApplicationService:
             except Exception:
                 pass
 
-        # ── Determine Application Channel (Website vs Email) ──
+        # ── Determine Application Channel (Portal vs Email) ──
         rec_email = (doc.get("recruiter_email") or (existing_app.recruiter_email if existing_app else "") or "").strip()
-        apply_m = doc.get("apply_method") or (getattr(existing_app, "apply_method", None) if existing_app else None) or ("email" if rec_email else "website")
+        raw_m = doc.get("apply_method") or (getattr(existing_app, "apply_method", None) if existing_app else None)
+        apply_m = raw_m if raw_m in ("website", "portal", "email") else ("email" if (rec_email and "@" in rec_email) else "website")
         is_email_dispatch = (apply_m == "email") and bool(rec_email) and ("@" in rec_email)
 
         app_letter_text = doc.pop("app_letter_text", None) or doc.get("notes") or ""

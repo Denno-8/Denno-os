@@ -1,0 +1,33 @@
+# robots.txt — Denno Career OS
+# Allow all well-behaved crawlers to index the public marketing pages.
+# Private, auth-gated app routes are excluded via noindex meta tags on those pages.
+
+User-agent: *
+Allow: /
+
+# Disallow private/app routes — these require authentication and return 302
+# so crawlers won't get useful content anyway, but this signals intent.
+Disallow: /applications
+Disallow: /jobs
+Disallow: /cv
+Disallow: /cv-generator
+Disallow: /cover-letter
+Disallow: /emails
+Disallow: /interviews
+Disallow: /calendar
+Disallow: /goals
+Disallow: /notes
+Disallow: /recruiters
+Disallow: /companies
+Disallow: /job-sources
+Disallow: /data
+Disallow: /settings
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /auth/
+
+# Crawl-delay to be polite to the Render free-tier backend
+Crawl-delay: 10
+
+# Sitemap location
+Sitemap: https://denno.app/sitemap.xml

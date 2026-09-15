@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 const ACCESS_KEY = "denno_access_token";
 
@@ -11,11 +12,13 @@ const ACCESS_KEY = "denno_access_token";
  * `?token=<access_jwt>` to the redirect URL. We:
  *   1. Read and store the access token in sessionStorage.
  *   2. Replace the URL (to remove ?token= from history).
- *   3. Navigate to the dashboard.
+ *   3. Clear React Query cache so stale role data doesn't persist.
+ *   4. Navigate to the dashboard.
  */
 export default function OAuthCallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,11 +27,14 @@ export default function OAuthCallbackPage() {
       sessionStorage.setItem(ACCESS_KEY, token);
       // Replace current history entry to strip the token from the URL bar
       window.history.replaceState({}, document.title, "/");
+      // Clear cached user data so the new session fetches fresh /auth/me
+      queryClient.clear();
       navigate("/applications", { replace: true });
     } else {
       setError("OAuth login failed — no token received. Please try again.");
     }
-  }, [params, navigate]);
+  }, [params, navigate, queryClient]);
+
 
   if (error) {
     return (

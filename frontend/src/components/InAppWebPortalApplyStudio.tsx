@@ -3,6 +3,7 @@ import {
   X, CheckCircle2, AlertCircle, FileText, ExternalLink, Sparkles, Send,
   User, Mail, Phone, MapPin, DollarSign, Clock, ShieldCheck, Wand2, RefreshCw,
   Eye, Edit3, ArrowRight, Check, Download, Save, RotateCcw, Copy, Zap, Inbox, Globe,
+  Building2, Briefcase,
 } from "lucide-react";
 import type { Job } from "../types/job.types";
 import { useCreateApplication } from "../hooks/useApplications";
@@ -14,7 +15,7 @@ import StructuredCVEditor from "./StructuredCVEditor";
 import JobPortalPreviewCard from "./JobPortalPreviewCard";
 import { extractResponsibilitiesAndRequirements } from "../utils/jobScrutiny";
 import { formatCleanSkillsString } from "../utils/skillSanitizer";
-import { API_URL } from "../services/api";
+import { API_URL, getAccessToken } from "../services/api";
 
 interface InAppWebPortalApplyStudioProps {
   isOpen: boolean;
@@ -53,6 +54,12 @@ export default function InAppWebPortalApplyStudio({
   const [email, setEmail] = useState(userEmail);
   const [phone, setPhone] = useState(userPhone);
   const [location, setLocation] = useState(userLocation);
+  const [idNumber, setIdNumber] = useState("38491024");
+  const [kraPin, setKraPin] = useState("A019283471K");
+  const [highestEducation, setHighestEducation] = useState("Bachelor of Science in Information Security and Forensics");
+  const [institutionName, setInstitutionName] = useState("Jomo Kenyatta University of Agriculture and Technology (JKUAT)");
+  const [yearsOfExperience, setYearsOfExperience] = useState("3+ Years");
+  const [currentEmployer, setCurrentEmployer] = useState("Full-Stack Software Engineer");
   const [salaryExpectation, setSalaryExpectation] = useState("");
   const [noticePeriod, setNoticePeriod] = useState(userNoticePeriod);
   const [workAuthorization, setWorkAuthorization] = useState("Authorized / Citizen");
@@ -68,7 +75,7 @@ export default function InAppWebPortalApplyStudio({
   const [screeningA1, setScreeningA1] = useState("");
   const [screeningA2, setScreeningA2] = useState("");
   const [screeningA3, setScreeningA3] = useState("");
-  const [formTab, setFormTab] = useState<"audit" | "personal" | "legal" | "screening" | "eeoc">("audit");
+  const [formTab, setFormTab] = useState<"audit" | "personal" | "education" | "legal" | "screening" | "eeoc">("audit");
 
   const [coverLetter, setCoverLetter] = useState("");
   const [cvVersionId, setCvVersionId] = useState("");
@@ -254,9 +261,17 @@ ${candidateEmail}.`;
 Full Name: ${fullName}
 Email: ${email}
 Phone: ${phone}
-Location: ${location}
+Location / Residence: ${location}
+National ID / Passport: ${idNumber}
+KRA PIN (Tax Compliance): ${kraPin}
 LinkedIn: ${linkedinUrl}
 GitHub / Portfolio: ${githubUrl}
+
+--- EDUCATION & WORK HISTORY ---
+Highest Qualification: ${highestEducation}
+University / Institution: ${institutionName}
+Years of Experience: ${yearsOfExperience}
+Current / Recent Role: ${currentEmployer}
 
 --- WORK AUTHORIZATION & AVAILABILITY ---
 Work Authorization: ${workAuthorization}
@@ -480,7 +495,8 @@ ${coverLetter}`;
                       {[
                         { id: "audit", label: "📊 AI Scrutiny Audit" },
                         { id: "personal", label: "👤 Personal & Socials" },
-                        { id: "legal", label: "💼 Work Eligibility & Sponsorship" },
+                        { id: "education", label: "🎓 Education & Experience" },
+                        { id: "legal", label: "💼 Eligibility & Kenya Disclosures" },
                         { id: "screening", label: "❓ AI Screening Answers" },
                         { id: "eeoc", label: "🛡️ EEOC Disclosures" },
                       ].map((tab) => (
@@ -617,6 +633,78 @@ ${coverLetter}`;
                             onChange={(e) => setGithubUrl(e.target.value)}
                             placeholder="https://github.com/username"
                             className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-semibold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <ShieldCheck size={12} /> National ID / Passport Number
+                          </label>
+                          <input
+                            value={idNumber}
+                            onChange={(e) => setIdNumber(e.target.value)}
+                            placeholder="e.g. 38491024"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <ShieldCheck size={12} /> KRA PIN (Kenyan Employer Compliance)
+                          </label>
+                          <input
+                            value={kraPin}
+                            onChange={(e) => setKraPin(e.target.value)}
+                            placeholder="e.g. A019283471K"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 3: Education & Work History */}
+                    {formTab === "education" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <FileText size={12} /> Highest Qualification / Degree
+                          </label>
+                          <input
+                            value={highestEducation}
+                            onChange={(e) => setHighestEducation(e.target.value)}
+                            placeholder="e.g. BSc Computer Science / Cybersecurity"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <Building2 size={12} /> University / Institution Name
+                          </label>
+                          <input
+                            value={institutionName}
+                            onChange={(e) => setInstitutionName(e.target.value)}
+                            placeholder="e.g. JKUAT / University of Nairobi"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <Clock size={12} /> Relevant Years of Technical Experience
+                          </label>
+                          <input
+                            value={yearsOfExperience}
+                            onChange={(e) => setYearsOfExperience(e.target.value)}
+                            placeholder="e.g. 3+ Years"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-1 text-slate-500 font-semibold mb-1">
+                            <Briefcase size={12} /> Current / Recent Organization & Role
+                          </label>
+                          <input
+                            value={currentEmployer}
+                            onChange={(e) => setCurrentEmployer(e.target.value)}
+                            placeholder="e.g. Full-Stack Software Engineer"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold outline-none focus:border-blue-500 text-xs transition-colors"
                           />
                         </div>
                       </div>
@@ -1061,7 +1149,7 @@ ${coverLetter}`;
                           type="button"
                           onClick={async () => {
                             try {
-                              const token = localStorage.getItem("token") || "";
+                              const token = getAccessToken();
                               const res = await fetch(`${API_URL}/jobs/${job.id}/autofill-payload`, {
                                 headers: { Authorization: `Bearer ${token}` }
                               });
@@ -1104,7 +1192,7 @@ ${coverLetter}`;
                               const q = target.value.trim();
                               if (!q) return;
                               try {
-                                const token = localStorage.getItem("token") || "";
+                                const token = getAccessToken();
                                 const res = await fetch(`${API_URL}/jobs/screening-question`, {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

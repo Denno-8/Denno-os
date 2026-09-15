@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useSEO } from "../../hooks/useSEO";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ApiErrorCard from "../../components/ApiErrorCard";
@@ -21,7 +22,7 @@ import { useCVVersions, useGenerateCVForJob } from "../../hooks/useCV";
 import DirectEmailDispatchModal from "../../components/DirectEmailDispatchModal";
 import FollowUpModal from "../../components/FollowUpModal";
 import { applicationsService } from "../../services/applications.service";
-import { API_URL } from "../../services/api";
+import { API_URL, getAccessToken } from "../../services/api";
 import { ALL_STAGES, type ApplicationStage, type ApplicationCreateInput } from "../../types/application.types";
 import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements } from "../../utils/jobScrutiny";
 
@@ -41,6 +42,7 @@ const STEPPER_ITEMS = [
 const STEPPER_STAGES = STEPPER_ITEMS;
 
 export default function ApplicationsPage() {
+  useSEO({ title: "My Applications — Denno Career OS", description: "Track all your job applications, manage stages, and monitor your career pipeline.", noIndex: true });
   const queryClient = useQueryClient();
   const { data: applications, isLoading, isError, refetch } = useApplications();
   const { data: analytics } = useApplicationAnalytics();
@@ -71,7 +73,7 @@ export default function ApplicationsPage() {
     if (!window.confirm(`Batch dispatch application emails for ${selectedAppIds.length} selected job application(s)?`)) return;
     setIsBatchSending(true);
     try {
-      const token = localStorage.getItem("token") || "";
+      const token = getAccessToken();
       const res = await fetch(`${API_URL}/applications/batch-dispatch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -100,7 +102,7 @@ export default function ApplicationsPage() {
     queryKey: ["applications", "dueFollowups"],
     queryFn: async () => {
       try {
-        const token = localStorage.getItem("token") || "";
+        const token = getAccessToken();
         const res = await fetch(`${API_URL}/applications/followups/due?days=7`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -118,7 +120,7 @@ export default function ApplicationsPage() {
     setIsSyncingResponses(true);
     setSyncNotice(null);
     try {
-      const token = localStorage.getItem("token") || "";
+      const token = getAccessToken();
       const res = await fetch(`${API_URL}/emails/sync-inbox`, {
         method: "POST",
         headers: {
