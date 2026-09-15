@@ -74,6 +74,21 @@ class AdminService:
             result.append(_serialize_user(u, app_count))
         return result
 
+    async def list_users_paginated(self, skip: int, limit: int, q: str, role: str = "", active_status: str = "") -> dict:
+        users = await self.repo.list_users(skip, limit, q, role, active_status)
+        total = await self.repo.count_users_filtered(q, role, active_status)
+        result = []
+        for u in users:
+            app_count = await self.repo.user_application_count(u.id)
+            result.append(_serialize_user(u, app_count))
+        return {
+            "users": result,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + limit) < total,
+        }
+
     async def get_user(self, user_id: int) -> dict:
         u = await self.repo.get_user(user_id)
         if not u:
@@ -81,21 +96,57 @@ class AdminService:
         app_count = await self.repo.user_application_count(user_id)
         return _serialize_user(u, app_count)
 
-    async def update_user_role(self, user_id: int, role: str) -> dict:
+    async def update_user_role(self, user_id: int, role: str, admin_id: int | None = None) -> dict:
         if role not in ("user", "admin"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Role must be 'user' or 'admin'")
+        if admin_id and admin_id == user_id and role != "admin":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot demote your own admin account.")
         u = await self.repo.update_user(user_id, {"role": role})
         if not u:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
         return _serialize_user(u)
 
-    async def suspend_user(self, user_id: int, suspend: bool) -> dict:
+    async def suspend_user(self, user_id: int, suspend: bool, admin_id: int | None = None) -> dict:
+        if admin_id and admin_id == user_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot suspend your own admin account.")
         u = await self.repo.update_user(user_id, {"is_active": not suspend})
         if not u:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
         return _serialize_user(u)
 
-    async def delete_user(self, user_id: int) -> bool:
+    async def update_user_profile(self, user_id: int, payload: dict) -> dict:
+        """Admin-level edit of any user's profile fields."""
+        ALLOWED_FIELDS = {
+            "first_name", "last_name", "email", "title", "location",
+            "phone", "role", "is_active", "years_experience"
+        }
+        patch = {k: v for k, v in payload.items() if k in ALLOWED_FIELDS and v is not None}
+        if not patch:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "No valid fields to update.")
+        if "email" in patch:
+            existing = await self.repo.get_user_by_email(patch["email"])
+            if existing and existing.id != user_id:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Email already in use by another account.")
+        u = await self.repo.update_user(user_id, patch)
+        if not u:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        app_count = await self.repo.user_application_count(user_id)
+        return _serialize_user(u, app_count)
+
+    async def reset_user_password(self, user_id: int, new_password: str) -> dict:
+        """Admin: force-reset any user's password."""
+        if len(new_password) < 8:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 8 characters.")
+        from app.core.security import hash_password
+        hashed = hash_password(new_password)
+        u = await self.repo.update_user(user_id, {"password_hash": hashed})
+        if not u:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        return {"success": True, "message": f"Password for user {user_id} reset successfully."}
+
+    async def delete_user(self, user_id: int, admin_id: int | None = None) -> bool:
+        if admin_id and admin_id == user_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot delete your own admin account.")
         deleted = await self.repo.delete_user(user_id)
         if not deleted:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")

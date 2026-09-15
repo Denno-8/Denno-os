@@ -7,8 +7,18 @@ export interface AdminUser {
   is_active: boolean;
   title: string;
   location: string;
+  phone: string;
+  years_experience: number;
   created_at: string;
   application_count: number;
+}
+
+export interface PaginatedUsers {
+  users: AdminUser[];
+  total: number;
+  skip: number;
+  limit: number;
+  has_more: boolean;
 }
 
 export interface AdminJob {

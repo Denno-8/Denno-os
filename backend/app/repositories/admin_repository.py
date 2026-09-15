@@ -46,11 +46,28 @@ class AdminRepository:
         await self.session.execute(
             update(User).where(User.id == user_id).values(**patch)
         )
+        await self.session.commit()
         return await self.get_user(user_id)
 
     async def delete_user(self, user_id: int) -> bool:
         result = await self.session.execute(delete(User).where(User.id == user_id))
+        await self.session.commit()
         return result.rowcount > 0
+
+    async def count_users_filtered(self, q: str = "", role: str = "", active_status: str = "") -> int:
+        stmt = select(func.count(User.id))
+        if q:
+            stmt = stmt.where(
+                User.email.ilike(f"%{q}%") | User.first_name.ilike(f"%{q}%") | User.last_name.ilike(f"%{q}%")
+            )
+        if role:
+            stmt = stmt.where(User.role == role)
+        if active_status == "active":
+            stmt = stmt.where(User.is_active.is_(True))
+        elif active_status == "suspended":
+            stmt = stmt.where(User.is_active.is_(False))
+        result = await self.session.execute(stmt)
+        return result.scalar_one() or 0
 
     async def count_users(self) -> int:
         result = await self.session.execute(select(func.count(User.id)))

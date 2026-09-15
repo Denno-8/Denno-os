@@ -34,10 +34,11 @@ function MetricCard({
 
 export default function AdminDashboard() {
   const { data: analytics, isLoading } = useAdminAnalytics();
-  const { data: users } = useAdminUsers();
+  const { data: usersData } = useAdminUsers();
+  const userList = usersData?.items ?? [];
 
-  const admins = (users ?? []).filter(u => u.role === "admin").length;
-  const regularUsers = (users ?? []).filter(u => u.role === "user").length;
+  const admins = userList.filter(u => u.role === "admin").length;
+  const regularUsers = userList.filter(u => u.role === "user").length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

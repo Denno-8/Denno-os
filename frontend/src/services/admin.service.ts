@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { AdminUser, AdminJob, AdminCompany, PlatformAnalytics, AdminEmailSettings } from "../types/admin.types";
+import type { AdminUser, AdminJob, AdminCompany, PlatformAnalytics, AdminEmailSettings, PaginatedUsers } from "../types/admin.types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -7,15 +7,28 @@ export const adminService = {
   // Analytics
   getAnalytics: () => api.get<PlatformAnalytics>("/admin/analytics"),
 
-  // Users
-  listUsers: (q = "", role = "", active_status = "", skip = 0, limit = 100) =>
-    api.get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q)}&role=${role}&active_status=${active_status}&skip=${skip}&limit=${limit}`),
+  // Users — paginated list
+  listUsers: (q = "", role = "", active_status = "", skip = 0, limit = 50) =>
+    api.get<PaginatedUsers>(
+      `/admin/users?q=${encodeURIComponent(q)}&role=${role}&active_status=${active_status}&skip=${skip}&limit=${limit}&paginated=true`
+    ),
+
   getUser: (id: number) => api.get<AdminUser>(`/admin/users/${id}`),
+
+  updateUserProfile: (id: number, payload: Partial<AdminUser>) =>
+    api.patch<AdminUser>(`/admin/users/${id}`, payload),
+
   updateRole: (id: number, role: string) =>
     api.patch<AdminUser>(`/admin/users/${id}/role`, { role }),
+
   suspendUser: (id: number, suspended: boolean) =>
     api.patch<AdminUser>(`/admin/users/${id}/suspend`, { suspended }),
+
+  resetUserPassword: (id: number, new_password: string) =>
+    api.post<{ success: boolean; message: string }>(`/admin/users/${id}/reset-password`, { new_password }),
+
   deleteUser: (id: number) => api.delete<void>(`/admin/users/${id}`),
+
   promoteByEmail: (email: string) =>
     api.post<AdminUser>("/admin/promote", { email }),
 

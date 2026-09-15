@@ -761,16 +761,28 @@ class EmailService:
         sent_status = False
         smtp_error_msg = None
 
+        # Derive rec_domain at outer scope so all guards below can use it
+        rec_domain = recruiter_email.split("@")[-1].strip() if (recruiter_email and "@" in str(recruiter_email)) else ""
+
         has_smtp_creds = bool(settings.smtp_user and settings.smtp_password)
 
-        if rec_domain in ["acme.com", "example.com", "testcorp.com", "domain.com"]:
+        if not settings.emails_enabled:
+            smtp_error_msg = "Emails are disabled in environment settings (EMAILS_ENABLED=false). Set EMAILS_ENABLED=true in your Render environment variables and redeploy."
+        elif rec_domain in ["acme.com", "example.com", "testcorp.com", "domain.com"]:
             smtp_error_msg = f"Recruiter email '{recruiter_email}' is a placeholder/test domain. Application logged to Sent Mail outbox; submit on official job portal link if required."
         elif not recruiter_email:
             smtp_error_msg = "Recruiter email is missing."
         elif not has_smtp_creds:
             smtp_error_msg = "SMTP credentials missing: Please add SMTP_USER (e.g. deno14619@gmail.com) and SMTP_PASSWORD (16-char Google App Password) in your Render environment variables."
         else:
-            def _do_send_smtp():
+            def _do_send_smtp(target_rec_email: str, target_rec_domain: str):
+                import socket
+                if target_rec_domain:
+                    try:
+                        socket.gethostbyname(target_rec_domain)
+                    except (socket.gaierror, socket.herror, Exception) as dns_err:
+                        raise ValueError(f"Recruiter email domain '{target_rec_domain}' could not be resolved via DNS. Email saved to outbox log.")
+
                 msg = MIMEMultipart("mixed")
                 
                 domain = "mail.gmail.com" if "gmail" in settings.smtp_from_email else (settings.smtp_from_email.split("@")[-1] if "@" in settings.smtp_from_email else "gmail.com")
@@ -778,7 +790,7 @@ class EmailService:
                 msg["Date"] = formatdate(localtime=True)
                 msg["MIME-Version"] = "1.0"
                 msg["From"] = f"{applicant_name or settings.smtp_from_name} <{settings.smtp_from_email}>"
-                msg["To"] = recruiter_email
+                msg["To"] = target_rec_email
                 msg["Reply-To"] = f"{applicant_name} <{applicant_email or settings.smtp_from_email}>"
                 msg["Subject"] = subject
 
@@ -806,18 +818,10 @@ class EmailService:
                     att_cv.add_header("Content-Disposition", "attachment", filename=f"Resume_{clean_applicant_filename}.pdf")
                     msg.attach(att_cv)
 
-                if applicant_email and applicant_email != recruiter_email:
+                if applicant_email and applicant_email != target_rec_email:
                     msg["Bcc"] = applicant_email
 
-                import socket
-                rec_domain = recruiter_email.split("@")[-1].strip() if "@" in recruiter_email else ""
-                if rec_domain:
-                    try:
-                        socket.gethostbyname(rec_domain)
-                    except socket.gaierror:
-                        raise ValueError(f"Recruiter email domain '{rec_domain}' does not exist (NXDOMAIN / No MX record). Email cannot be delivered. Please use the company's official Job Application Portal link instead.")
-
-                recipients = [recruiter_email]
+                recipients = [target_rec_email]
                 if applicant_email and applicant_email not in recipients:
                     recipients.append(applicant_email)
                 if settings.smtp_from_email and settings.smtp_from_email not in recipients:
@@ -848,7 +852,7 @@ class EmailService:
 
             try:
                 import asyncio
-                await asyncio.to_thread(_do_send_smtp)
+                await asyncio.to_thread(_do_send_smtp, recruiter_email, rec_domain)
                 sent_status = True
             except Exception as exc:
                 smtp_error_msg = str(exc)

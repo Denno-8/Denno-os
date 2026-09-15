@@ -215,3 +215,7 @@ input, button, select, textarea {
 /* ── Scrollable modal / table containers on all screens ── */
 .denno-table-wrap { overflow-x: auto; border-radius: 12px; }
 .denno-modal-scroll { overflow-y: auto; max-height: 85vh; }
+
+@keyframes denno-spin {
+  to { transform: rotate(360deg); }
+}
