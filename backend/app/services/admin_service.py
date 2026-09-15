@@ -104,7 +104,8 @@ class AdminService:
         u = await self.repo.update_user(user_id, {"role": role})
         if not u:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-        return _serialize_user(u)
+        app_count = await self.repo.user_application_count(user_id)
+        return _serialize_user(u, app_count)
 
     async def suspend_user(self, user_id: int, suspend: bool, admin_id: int | None = None) -> dict:
         if admin_id and admin_id == user_id:
@@ -112,7 +113,8 @@ class AdminService:
         u = await self.repo.update_user(user_id, {"is_active": not suspend})
         if not u:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-        return _serialize_user(u)
+        app_count = await self.repo.user_application_count(user_id)
+        return _serialize_user(u, app_count)
 
     async def update_user_profile(self, user_id: int, payload: dict) -> dict:
         """Admin-level edit of any user's profile fields."""
@@ -124,6 +126,7 @@ class AdminService:
         if not patch:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "No valid fields to update.")
         if "email" in patch:
+            patch["email"] = patch["email"].strip().lower()
             existing = await self.repo.get_user_by_email(patch["email"])
             if existing and existing.id != user_id:
                 raise HTTPException(status.HTTP_409_CONFLICT, "Email already in use by another account.")
@@ -153,11 +156,15 @@ class AdminService:
         return True
 
     async def promote_by_email(self, email: str) -> dict:
-        u = await self.repo.get_user_by_email(email)
+        clean_email = email.strip().lower()
+        u = await self.repo.get_user_by_email(clean_email)
         if not u:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"No user found with email: {email}")
         updated = await self.repo.update_user(u.id, {"role": "admin"})
-        return _serialize_user(updated)
+        if not updated:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to promote user.")
+        app_count = await self.repo.user_application_count(u.id)
+        return _serialize_user(updated, app_count)
 
     # ─── Analytics ────────────────────────────────────────────────────────────
     async def platform_analytics(self) -> dict:

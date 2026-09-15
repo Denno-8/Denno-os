@@ -39,15 +39,20 @@ class AdminRepository:
         return result.scalar_one_or_none()
 
     async def get_user_by_email(self, email: str) -> User | None:
-        result = await self.session.execute(select(User).where(User.email == email))
+        clean_email = email.strip().lower()
+        result = await self.session.execute(select(User).where(User.email == clean_email))
         return result.scalar_one_or_none()
 
     async def update_user(self, user_id: int, patch: dict) -> User | None:
-        await self.session.execute(
-            update(User).where(User.id == user_id).values(**patch)
-        )
-        await self.session.commit()
-        return await self.get_user(user_id)
+        user = await self.get_user(user_id)
+        if user:
+            for key, value in patch.items():
+                if hasattr(user, key) and key not in ("id", "created_at"):
+                    setattr(user, key, value)
+            await self.session.flush()
+            await self.session.commit()
+            await self.session.refresh(user)
+        return user
 
     async def delete_user(self, user_id: int) -> bool:
         result = await self.session.execute(delete(User).where(User.id == user_id))
