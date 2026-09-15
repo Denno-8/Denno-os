@@ -313,17 +313,23 @@ async def denno1_chat(
     ]
 
     client = get_anthropic_client()
+    reply_text = None
 
     if client:
-        resp = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
-            system=system_prompt,
-            messages=api_messages,
-        )
-        reply_text = "".join(b.text for b in resp.content if b.type == "text")
-    else:
-        # Intelligent fallback
+        try:
+            target_model = settings.ai_model_name if settings.ai_model_name and "claude-sonnet-4-6" not in settings.ai_model_name else "claude-3-5-sonnet-20241022"
+            resp = await client.messages.create(
+                model=target_model,
+                max_tokens=1200,
+                system=system_prompt,
+                messages=api_messages,
+            )
+            reply_text = "".join(b.text for b in resp.content if b.type == "text")
+        except Exception as exc:
+            print(f"[AI Chatbot] Anthropic API call exception: {exc}")
+
+    if not reply_text:
+        # Intelligent domain-aware fallback
         user_msg = api_messages[-1]["content"] if api_messages else ""
         reply_text = _fallback_reply(user_msg)
 
@@ -369,8 +375,9 @@ async def denno1_stream(
         full_text = ""
         if client:
             try:
+                target_model = settings.ai_model_name if settings.ai_model_name and "claude-sonnet-4-6" not in settings.ai_model_name else "claude-3-5-sonnet-20241022"
                 async with client.messages.stream(
-                    model="claude-sonnet-4-6",
+                    model=target_model,
                     max_tokens=1200,
                     system=system_prompt,
                     messages=api_messages,
@@ -445,30 +452,34 @@ async def generate_cover_letter(
 
     client = get_anthropic_client()
     if client:
-        resp = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
-            system=(
-                f"You are an expert career strategist writing an authentic, tailored cover letter for {candidate_name or 'the candidate'} "
-                f"applying for a role in {payload.category}. "
-                f"Tone: {payload.tone}. Guidance: {category_guidance}. "
-                f"The candidate's genuine skills include: {skills_hint}. "
-                f"Contact: {candidate_email}{', ' + candidate_phone if candidate_phone else ''}{', ' + candidate_location if candidate_location else ''}. "
-                "Structure in formal cover letter paragraphs with proper date, recipient header, subject line, professional opening, core technical achievements, role alignment, and professional sign-off. "
-                "CRITICAL INSTRUCTION: Never include company names, hashtags, job portal noise, or raw unspaced words (such as 'BMW Group', 'Idealworks', 'Munichjobs', 'automationandrobotics') as candidate skills or keywords. "
-                "Synthesize job duties into clean, fluent, professional narrative prose. Sign off with the candidate's real name."
-            ),
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Target Role: {payload.job_title} at {payload.company}\n"
-                    f"Category: {payload.category}\n"
-                    f"{'Key Requirements & Context: ' + clean_jd[:400] if clean_jd else ''}"
+        try:
+            target_model = settings.ai_model_name if settings.ai_model_name and "claude-sonnet-4-6" not in settings.ai_model_name else "claude-3-5-sonnet-20241022"
+            resp = await client.messages.create(
+                model=target_model,
+                max_tokens=1200,
+                system=(
+                    f"You are an expert career strategist writing an authentic, tailored cover letter for {candidate_name or 'the candidate'} "
+                    f"applying for a role in {payload.category}. "
+                    f"Tone: {payload.tone}. Guidance: {category_guidance}. "
+                    f"The candidate's genuine skills include: {skills_hint}. "
+                    f"Contact: {candidate_email}{', ' + candidate_phone if candidate_phone else ''}{', ' + candidate_location if candidate_location else ''}. "
+                    "Structure in formal cover letter paragraphs with proper date, recipient header, subject line, professional opening, core technical achievements, role alignment, and professional sign-off. "
+                    "CRITICAL INSTRUCTION: Never include company names, hashtags, job portal noise, or raw unspaced words (such as 'BMW Group', 'Idealworks', 'Munichjobs', 'automationandrobotics') as candidate skills or keywords. "
+                    "Synthesize job duties into clean, fluent, professional narrative prose. Sign off with the candidate's real name."
                 ),
-            }],
-        )
-        text = "".join(b.text for b in resp.content if b.type == "text")
-        return {"letter": text, "category": payload.category}
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Target Role: {payload.job_title} at {payload.company}\n"
+                        f"Category: {payload.category}\n"
+                        f"{'Key Requirements & Context: ' + clean_jd[:400] if clean_jd else ''}"
+                    ),
+                }],
+            )
+            text = "".join(b.text for b in resp.content if b.type == "text")
+            return {"letter": text, "category": payload.category}
+        except Exception as exc:
+            print(f"[Cover Letter AI] Exception generating letter via Anthropic: {exc}")
 
     # Fallback template using live user profile data
     today_str = datetime.now().strftime("%d %B %Y")
