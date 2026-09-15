@@ -148,7 +148,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {(users ?? []).slice(0, 8).map((u) => (
+                  {(userList ?? []).slice(0, 8).map((u) => (
                     <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-5 py-3 font-semibold text-slate-900 dark:text-white">
                         {u.first_name} {u.last_name}
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
                       </td>
                     </tr>
                   ))}
-                  {(!users || users.length === 0) && (
+                  {(!userList || userList.length === 0) && (
                     <tr>
                       <td colSpan={5} className="px-5 py-8 text-center text-slate-400 text-sm">
                         No users registered yet.
