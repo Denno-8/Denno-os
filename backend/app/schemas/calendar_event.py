@@ -25,9 +25,9 @@ class CalendarEventUpdate(BaseModel):
 class CalendarEventOut(BaseModel):
     id: str
     title: str
-    type: str
+    type: str = "Task"
     date: date
-    time: str
-    color: str
-    application_id: str | None = None
-    created_at: datetime
+    time: str = ""
+    color: str = "blue"
+    application_id: Optional[str] = None
+    created_at: Optional[datetime] = None
