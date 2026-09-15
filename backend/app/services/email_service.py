@@ -761,13 +761,15 @@ class EmailService:
         sent_status = False
         smtp_error_msg = None
 
-        # Enable emails if SMTP credentials exist, or if emails_enabled is True
         has_smtp_creds = bool(settings.smtp_user and settings.smtp_password)
-        is_enabled = has_smtp_creds or getattr(settings, "emails_enabled", True)
 
         if rec_domain in ["acme.com", "example.com", "testcorp.com", "domain.com"]:
             smtp_error_msg = f"Recruiter email '{recruiter_email}' is a placeholder/test domain. Application logged to Sent Mail outbox; submit on official job portal link if required."
-        elif is_enabled and has_smtp_creds and recruiter_email:
+        elif not recruiter_email:
+            smtp_error_msg = "Recruiter email is missing."
+        elif not has_smtp_creds:
+            smtp_error_msg = "SMTP credentials missing: Please add SMTP_USER (e.g. deno14619@gmail.com) and SMTP_PASSWORD (16-char Google App Password) in your Render environment variables."
+        else:
             def _do_send_smtp():
                 msg = MIMEMultipart("mixed")
                 
@@ -851,12 +853,6 @@ class EmailService:
             except Exception as exc:
                 smtp_error_msg = str(exc)
                 print(f"SMTP dispatch error: {exc}")
-        elif not has_smtp_creds:
-            smtp_error_msg = "SMTP_USER / SMTP_PASSWORD is not set in backend environment variables. Please add SMTP_USER and SMTP_PASSWORD in Render Dashboard."
-        elif not is_enabled:
-            smtp_error_msg = "Emails are disabled in environment settings (EMAILS_ENABLED=false)."
-        elif not recruiter_email:
-            smtp_error_msg = "Recruiter email is missing."
 
         # ── 6. Record outgoing application email record in DB ──
         doc = {
