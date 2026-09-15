@@ -463,6 +463,12 @@ function AddEventModal({ presetDate, onClose }: { presetDate: string; onClose: (
           </button>
         </div>
 
+        {createEvent.isError && (
+          <div className="p-3 mb-4 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-700 dark:text-rose-300 text-xs font-semibold">
+            {(createEvent.error as any)?.detail || (createEvent.error as any)?.message || "Failed to save event. Please check inputs and try again."}
+          </div>
+        )}
+
         <div className="space-y-3 mb-5">
           <div>
             <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Event Title</label>

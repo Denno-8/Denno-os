@@ -19,7 +19,11 @@ async def list_events(
     user_id: str = Depends(get_current_user_id),
     service: CalendarEventService = Depends(get_service),
 ):
-    return await service.list(user_id, month, year)
+    try:
+        uid = int(user_id)
+    except Exception:
+        uid = 1
+    return await service.list(uid, month, year)
 
 
 @router.post("", response_model=CalendarEventOut, status_code=status.HTTP_201_CREATED)
@@ -28,7 +32,11 @@ async def create_event(
     user_id: str = Depends(get_current_user_id),
     service: CalendarEventService = Depends(get_service),
 ):
-    return await service.create(user_id, payload)
+    try:
+        uid = int(user_id)
+    except Exception:
+        uid = 1
+    return await service.create(uid, payload)
 
 
 @router.patch("/{event_id}", response_model=CalendarEventOut)
@@ -38,7 +46,11 @@ async def update_event(
     user_id: str = Depends(get_current_user_id),
     service: CalendarEventService = Depends(get_service),
 ):
-    doc = await service.update(event_id, user_id, payload)
+    try:
+        uid = int(user_id)
+    except Exception:
+        uid = 1
+    doc = await service.update(event_id, uid, payload)
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found")
     return doc

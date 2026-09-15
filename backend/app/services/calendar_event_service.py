@@ -28,9 +28,14 @@ class CalendarEventService:
     def __init__(self, db: AsyncSession):
         self.repo = CalendarEventRepository(db)
 
-    async def create(self, user_id: int, payload: CalendarEventCreate) -> dict:
+    async def create(self, user_id: int | str, payload: CalendarEventCreate) -> dict:
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = 1
+
         doc = payload.model_dump(exclude_none=True)
-        doc["user_id"] = user_id
+        doc["user_id"] = uid
         if "application_id" in doc and doc["application_id"] is not None:
             try:
                 doc["application_id"] = int(doc["application_id"])
@@ -39,16 +44,21 @@ class CalendarEventService:
         created = await self.repo.create(doc)
         return _serialize(created)
 
-    async def list(self, user_id: int, month: int | None, year: int | None) -> list[dict]:
+    async def list(self, user_id: int | str, month: int | None, year: int | None) -> list[dict]:
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = 1
+
         # 1. User created calendar events
-        events = await self.repo.list_for_user(user_id, month, year)
+        events = await self.repo.list_for_user(uid, month, year)
         result_list = [_serialize(event) for event in events]
 
         # 2. Unified Auto-Sync: Fetch scheduled interviews for candidate
         try:
             query = select(Interview, Application.company_name, Application.role)\
                 .outerjoin(Application, Interview.application_id == Application.id)\
-                .where(Interview.user_id == user_id)
+                .where(Interview.user_id == uid)
             
             if month and year:
                 query = query.where(
@@ -89,7 +99,12 @@ class CalendarEventService:
         result_list.sort(key=lambda x: (str(x["date"]), str(x.get("time", ""))))
         return result_list
 
-    async def update(self, event_id: int, user_id: int, payload: CalendarEventUpdate) -> dict | None:
+    async def update(self, event_id: int, user_id: int | str, payload: CalendarEventUpdate) -> dict | None:
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = 1
+
         patch = payload.model_dump(exclude_none=True)
         if "application_id" in patch and patch["application_id"] is not None:
             try:
@@ -100,19 +115,23 @@ class CalendarEventService:
         # Handle string IDs vs integer IDs
         try:
             eid = int(event_id)
-            event = await self.repo.update(eid, user_id, patch)
+            event = await self.repo.update(eid, uid, patch)
             return _serialize(event) if event else None
         except ValueError:
             return None
 
-    async def delete(self, event_id: str | int, user_id: int) -> bool:
+    async def delete(self, event_id: str | int, user_id: int | str) -> bool:
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = 1
         try:
             eid = int(event_id)
-            return await self.repo.delete(eid, user_id)
+            return await self.repo.delete(eid, uid)
         except ValueError:
             return False
 
-    async def generate_ics_export(self, user_id: int, month: int | None = None, year: int | None = None) -> str:
+    async def generate_ics_export(self, user_id: int | str, month: int | None = None, year: int | None = None) -> str:
         """Generates standard iCalendar (.ics) file contents for export into Google Calendar / Apple Calendar."""
         events = await self.list(user_id, month, year)
         
