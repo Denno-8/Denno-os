@@ -855,7 +855,8 @@ class EmailService:
                 await asyncio.to_thread(_do_send_smtp, recruiter_email, rec_domain)
                 sent_status = True
             except Exception as exc:
-                smtp_error_msg = str(exc)
+                from app.core.security_sanitizer import sanitize_exception_message
+                smtp_error_msg = sanitize_exception_message(exc, default_fallback="Application logged to Sent Mail outbox; submit on official job portal link if required.")
                 print(f"SMTP dispatch error: {exc}")
 
         # ── 6. Record outgoing application email record in DB ──

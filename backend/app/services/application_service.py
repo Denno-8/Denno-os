@@ -171,8 +171,9 @@ class ApplicationService:
                     applicant_info=applicant_info,
                 )
             except Exception as exc:
+                from app.core.security_sanitizer import sanitize_exception_message
                 print(f"Error recording application email dispatch: {exc}")
-                email_result = {"email_sent": False, "smtp_error": str(exc)}
+                email_result = {"email_sent": False, "smtp_error": sanitize_exception_message(exc)}
 
         try:
             from app.services.notification_service import NotificationService

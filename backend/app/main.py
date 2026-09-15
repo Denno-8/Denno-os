@@ -180,6 +180,36 @@ async def health():
     return {"status": "ok"}
 
 
+from fastapi.responses import JSONResponse
+import traceback
+
+# ── Global Exception Handler — Hides raw Python code errors from frontend ──────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    req_id = getattr(request.state, "request_id", "unknown")
+    logger.error(
+        "[INTERNAL ERROR 500] Unhandled exception on %s %s (req_id=%s):\n%s",
+        request.method, request.url.path, req_id, traceback.format_exc()
+    )
+    # Sanitize: Never leak internal tracebacks, variable names, or python errors to frontend
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server processing error occurred. Please try again later.",
+            "status": 500,
+            "request_id": req_id,
+        },
+    )
+
+
+@app.get("/health/icmp", tags=["System"])
+@app.get("/api/v1/telemetry/icmp", tags=["System"])
+async def icmp_telemetry_ping():
+    """Performs real ICMP & network socket echo latency diagnostics."""
+    from app.services.icmp_service import ICMPService
+    return await ICMPService.full_network_diagnostics()
+
+
 @app.get("/health/ready", tags=["System"])
 async def readiness():
     """Checks that both PostgreSQL and Redis are reachable."""
