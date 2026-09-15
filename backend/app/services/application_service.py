@@ -140,7 +140,7 @@ class ApplicationService:
             if user_obj:
                 full_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
                 applicant_info = {
-                    "name": full_name or "Dennis K",
+                    "name": full_name or user_obj.email.split("@")[0].title() if user_obj.email else "Applicant",
                     "email": user_obj.email or "",
                     "phone": getattr(user_obj, "phone", "") or "",
                     "location": getattr(user_obj, "location", "") or "Nairobi, Kenya"
@@ -332,7 +332,18 @@ class ApplicationService:
 
         days_elapsed = (datetime.now(timezone.utc).date() - date_applied).days
 
-        # Tone and stage based templates
+        # Fetch the real applicant name from the user profile
+        applicant_name = "Applicant"
+        try:
+            from app.models.sqlalchemy_models import User
+            from sqlalchemy import select as sa_select
+            user_res = await self.repo.session.execute(sa_select(User).where(User.id == user_id))
+            user_obj = user_res.scalars().first()
+            if user_obj:
+                full_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip()
+                applicant_name = full_name or (user_obj.email.split("@")[0].title() if user_obj.email else "Applicant")
+        except Exception:
+            pass
         if stage in ["Technical", "HR Interview", "Final Interview"]:
             subject = f"Thank you & Following up: {role} Interview — {comp_name}"
             body = (
@@ -341,7 +352,7 @@ class ApplicationService:
                 f"I really enjoyed learning more about your technical goals and vision.\n\n"
                 f"I wanted to briefly reiterate my strong enthusiasm for joining {comp_name}. "
                 f"Please let me know if there are any additional details or references I can provide.\n\n"
-                f"Best regards,\nCandidate"
+                f"Best regards,\n{applicant_name}"
             )
         elif stage == "Offer":
             subject = f"Regarding {comp_name} — {role} Offer Details"
@@ -351,11 +362,11 @@ class ApplicationService:
                 f"I am thrilled about the opportunity to contribute to your team.\n\n"
                 f"I am currently reviewing the offer details and would love to clarify a few parameters before finalizing. "
                 f"Looking forward to speaking soon.\n\n"
-                f"Warm regards,\nCandidate"
+                f"Warm regards,\n{applicant_name}"
             )
         else:
             # Applied / Confirmed / Under Review / Unresponded
-            subject = f"Following up on application: {role} — Candidate Status Inquiry"
+            subject = f"Following up on application: {role} — {applicant_name}"
             if tone == "confident":
                 body = (
                     f"Hi {comp_name} Recruiting Team,\n\n"
@@ -363,7 +374,7 @@ class ApplicationService:
                     f"I am following up on my application for the {role} position submitted {days_elapsed} days ago. "
                     f"Given my background building high-throughput APIs and cloud solutions, I am confident I can bring immediate value to {comp_name}.\n\n"
                     f"I would welcome the opportunity for a brief conversation to discuss how my skill set aligns with your current priorities.\n\n"
-                    f"Best regards,\nCandidate"
+                    f"Best regards,\n{applicant_name}"
                 )
             elif tone == "technical":
                 body = (
@@ -371,7 +382,7 @@ class ApplicationService:
                     f"I submitted an application for the {role} role {days_elapsed} days ago and wanted to reach out directly to restate my interest.\n\n"
                     f"With expertise in modern backend architecture, test automation, and database query optimization, I am very keen to contribute to {comp_name}'s engineering codebase.\n\n"
                     f"Could you provide an update on the hiring timeline for this opening?\n\n"
-                    f"Sincerely,\nCandidate"
+                    f"Sincerely,\n{applicant_name}"
                 )
             else:  # polite / default
                 body = (
@@ -380,7 +391,7 @@ class ApplicationService:
                     f"I submitted my application for the {role} position {days_elapsed} days ago and wanted to check in on the status of the review process.\n\n"
                     f"I remain very interested in the opportunity to join {comp_name}. Please let me know if you require any additional information from my side.\n\n"
                     f"Thank you for your time and consideration.\n\n"
-                    f"Best regards,\nCandidate"
+                    f"Best regards,\n{applicant_name}"
                 )
 
         # Generate iCal (.ics) string for 1-click Google/Apple calendar reminder

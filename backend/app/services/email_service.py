@@ -761,10 +761,10 @@ class EmailService:
         sent_status = False
         smtp_error_msg = None
 
-        rec_domain = recruiter_email.split("@")[-1].strip().lower() if "@" in recruiter_email else ""
+        is_enabled = settings.emails_enabled if hasattr(settings, "emails_enabled") else True
         if rec_domain in ["acme.com", "example.com", "testcorp.com", "domain.com"]:
             smtp_error_msg = f"Recruiter email '{recruiter_email}' is a placeholder/test domain. Application logged to Sent Mail outbox; submit on official job portal link if required."
-        elif settings.emails_enabled and settings.smtp_user and settings.smtp_password and recruiter_email:
+        elif is_enabled and settings.smtp_user and settings.smtp_password and recruiter_email:
             def _do_send_smtp():
                 msg = MIMEMultipart("mixed")
                 
@@ -824,6 +824,23 @@ class EmailService:
                     server.login(settings.smtp_user, smtp_pass)
                     server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
 
+                # Also save copy to IMAP Sent folder if IMAP configured
+                try:
+                    import imaplib
+                    import time
+                    imap_user = settings.smtp_user
+                    if imap_user and smtp_pass:
+                        imap_host = "imap.gmail.com" if "gmail" in imap_user else getattr(settings, "imap_host", "imap.gmail.com")
+                        with imaplib.IMAP4_SSL(imap_host, 993) as imap_server:
+                            imap_server.login(imap_user, smtp_pass)
+                            sent_folder = '"[Gmail]/Sent Mail"' if "gmail" in imap_host else 'Sent'
+                            try:
+                                imap_server.append(sent_folder, '\\Seen', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+                            except Exception:
+                                imap_server.append("Sent", '\\Seen', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+                except Exception as imap_err:
+                    print(f"IMAP Sent append note: {imap_err}")
+
             try:
                 import asyncio
                 await asyncio.to_thread(_do_send_smtp)
@@ -831,10 +848,10 @@ class EmailService:
             except Exception as exc:
                 smtp_error_msg = str(exc)
                 print(f"SMTP dispatch error: {exc}")
-        elif not settings.emails_enabled:
+        elif not is_enabled:
             smtp_error_msg = "Emails are disabled in environment settings (EMAILS_ENABLED=false)."
         elif not settings.smtp_user or not settings.smtp_password:
-            smtp_error_msg = "SMTP_USER or SMTP_PASSWORD is not configured."
+            smtp_error_msg = "SMTP_USER / SMTP_PASSWORD is not set in backend environment variables. Application logged to Outbox."
         elif not recruiter_email:
             smtp_error_msg = "Recruiter email is missing."
 
@@ -851,6 +868,28 @@ class EmailService:
             "source": "smtp_sent" if sent_status else "application_dispatch"
         }
         created = await self.repo.create(doc)
+
+        # ── 7. Create In-App Notification & Real-Time SSE Broadcast ──
+        try:
+            from app.services.notification_service import NotificationService
+            from app.schemas.notification import NotificationCreate
+            notif_svc = NotificationService(self.repo.session)
+            if sent_status:
+                notif_title = "Email Application Sent! 📧"
+                notif_msg = f"Dispatched official application for {role_title} at {company_name} to {recruiter_email} with attached PDF resume & cover letter."
+            else:
+                notif_title = "Application Outbound Logged 📧"
+                notif_msg = f"Application for {role_title} at {company_name} saved to Sent box: {smtp_error_msg or 'Outbound log created.'}"
+
+            await notif_svc.create(user_id, NotificationCreate(
+                title=notif_title,
+                message=notif_msg,
+                type="application",
+                link="/applications"
+            ))
+        except Exception as notif_err:
+            print(f"Error creating notification for application email: {notif_err}")
+
         res = _serialize(created)
         res["email_sent"] = sent_status
         if smtp_error_msg:

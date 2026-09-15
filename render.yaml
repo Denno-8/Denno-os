@@ -65,4 +65,4 @@ services:
 
       # ── Email
       - key: EMAILS_ENABLED
-        value: false
+        value: true

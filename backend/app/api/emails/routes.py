@@ -99,8 +99,8 @@ async def classify_email_text(
 async def get_google_oauth_url(user_id: str = Depends(get_current_user_id)):
     """Returns OAuth2 consent redirect URL for Google Workspace / Gmail."""
     from app.core.config import settings
-    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "google-oauth-client-id.apps.googleusercontent.com")
-    redirect_uri = "http://localhost:5173/applications?oauth=google_success"
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "")
+    redirect_uri = f"{settings.frontend_origin}/applications?oauth=google_success"
     scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send"
     url = f"https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&access_type=offline&prompt=consent"
     return {"provider": "google", "oauth_url": url, "configured": bool(client_id and "apps.googleusercontent.com" not in client_id)}
@@ -110,10 +110,10 @@ async def get_google_oauth_url(user_id: str = Depends(get_current_user_id)):
 async def get_microsoft_oauth_url(user_id: str = Depends(get_current_user_id)):
     """Returns OAuth2 consent redirect URL for Microsoft 365 / Outlook Graph API."""
     from app.core.config import settings
-    client_id = getattr(settings, "MICROSOFT_CLIENT_ID", "microsoft-oauth-client-id")
-    redirect_uri = "http://localhost:5173/applications?oauth=microsoft_success"
+    client_id = getattr(settings, "MICROSOFT_CLIENT_ID", "")
+    redirect_uri = f"{settings.frontend_origin}/applications?oauth=microsoft_success"
     scope = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send"
     url = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id={client_id}&response_type=code&redirect_uri={redirect_uri}&response_mode=query&scope={scope}"
-    return {"provider": "microsoft", "oauth_url": url, "configured": bool(client_id and "microsoft-oauth-client-id" not in client_id)}
+    return {"provider": "microsoft", "oauth_url": url, "configured": bool(client_id and client_id)}
 
 

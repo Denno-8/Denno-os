@@ -14,6 +14,7 @@ import StructuredCVEditor from "./StructuredCVEditor";
 import JobPortalPreviewCard from "./JobPortalPreviewCard";
 import { extractResponsibilitiesAndRequirements } from "../utils/jobScrutiny";
 import { formatCleanSkillsString } from "../utils/skillSanitizer";
+import { API_URL } from "../services/api";
 
 interface InAppWebPortalApplyStudioProps {
   isOpen: boolean;
@@ -1061,7 +1062,7 @@ ${coverLetter}`;
                           onClick={async () => {
                             try {
                               const token = localStorage.getItem("token") || "";
-                              const res = await fetch(`/api/jobs/${job.id}/autofill-payload`, {
+                              const res = await fetch(`${API_URL}/jobs/${job.id}/autofill-payload`, {
                                 headers: { Authorization: `Bearer ${token}` }
                               });
                               if (res.ok) {
@@ -1104,7 +1105,7 @@ ${coverLetter}`;
                               if (!q) return;
                               try {
                                 const token = localStorage.getItem("token") || "";
-                                const res = await fetch("/api/jobs/screening-question", {
+                                const res = await fetch(`${API_URL}/jobs/screening-question`, {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                                   body: JSON.stringify({ question: q, role_title: job.title, company_name: job.company_name })

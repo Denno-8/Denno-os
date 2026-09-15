@@ -128,7 +128,7 @@ export default function JobsPage() {
     queryKey: ["jobs", "telemetry"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/jobs/telemetry/status");
+        const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1"}/jobs/telemetry/status`);
         if (res.ok) return await res.json();
       } catch {}
       return null;

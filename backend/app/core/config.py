@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
     smtp_from_email: str = Field(default="noreply@denno.app", alias="SMTP_FROM_EMAIL")
     smtp_from_name: str = Field(default="Denno Career OS", alias="SMTP_FROM_NAME")
-    emails_enabled: bool = Field(default=False, alias="EMAILS_ENABLED")
+    emails_enabled: bool = Field(default=True, alias="EMAILS_ENABLED")
     # True = plain SSL on connect (port 465); False = STARTTLS after connect (port 587)
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     # STARTTLS upgrade. Set to False only if SMTP_USE_SSL=True or testing with localhost:1025

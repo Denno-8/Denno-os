@@ -6,7 +6,11 @@ export function useNotifications() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const token = localStorage.getItem("denno_token") || sessionStorage.getItem("denno_token");
+    const token =
+      sessionStorage.getItem("denno_access_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("denno_token") ||
+      sessionStorage.getItem("denno_token");
     if (!token) return;
 
     const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";

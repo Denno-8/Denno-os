@@ -21,6 +21,7 @@ import { useCVVersions, useGenerateCVForJob } from "../../hooks/useCV";
 import DirectEmailDispatchModal from "../../components/DirectEmailDispatchModal";
 import FollowUpModal from "../../components/FollowUpModal";
 import { applicationsService } from "../../services/applications.service";
+import { API_URL } from "../../services/api";
 import { ALL_STAGES, type ApplicationStage, type ApplicationCreateInput } from "../../types/application.types";
 import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements } from "../../utils/jobScrutiny";
 
@@ -71,7 +72,7 @@ export default function ApplicationsPage() {
     setIsBatchSending(true);
     try {
       const token = localStorage.getItem("token") || "";
-      const res = await fetch("/api/applications/batch-dispatch", {
+      const res = await fetch(`${API_URL}/applications/batch-dispatch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ application_ids: selectedAppIds })
@@ -100,7 +101,7 @@ export default function ApplicationsPage() {
     queryFn: async () => {
       try {
         const token = localStorage.getItem("token") || "";
-        const res = await fetch("/api/applications/followups/due?days=7", {
+        const res = await fetch(`${API_URL}/applications/followups/due?days=7`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -118,7 +119,7 @@ export default function ApplicationsPage() {
     setSyncNotice(null);
     try {
       const token = localStorage.getItem("token") || "";
-      const res = await fetch("/api/emails/sync-inbox", {
+      const res = await fetch(`${API_URL}/emails/sync-inbox`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
