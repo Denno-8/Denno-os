@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, getAccessToken } from "./api";
 import type { CVVersion, CVVersionCreateInput, CVVersionUpdateInput } from "../types/cv.types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
@@ -115,7 +115,7 @@ export const cvService = {
     api.post<any>(`/cv/${id}/tailor`, payload),
   remove: (id: string) => api.delete<void>(`/cv/${id}`),
   downloadRaw: async (id: string, filename: string) => {
-    const token = sessionStorage.getItem("denno_access_token");
+    const token = getAccessToken();
     let res: Response;
     try {
       res = await fetch(`${API_URL}/cv/${id}/download`, {
@@ -139,7 +139,7 @@ export const cvService = {
     window.URL.revokeObjectURL(url);
   },
   exportPDF: async (id: string, theme: string = "Sapphire", fallbackFilename?: string, roleFocus?: string) => {
-    const token = sessionStorage.getItem("denno_access_token");
+    const token = getAccessToken();
     let pdfEndpointUrl = `${API_URL}/cv/${id}/export.pdf?theme=${encodeURIComponent(theme)}`;
     if (roleFocus) pdfEndpointUrl += `&role_focus=${encodeURIComponent(roleFocus)}`;
     let res: Response;

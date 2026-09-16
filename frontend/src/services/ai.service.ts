@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, getAccessToken } from "./api";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -55,7 +55,7 @@ export interface ChatSession {
 }
 
 function authHeader(): Record<string, string> {
-  const token = sessionStorage.getItem("denno_access_token");
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

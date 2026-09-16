@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, getAccessToken } from "./api";
 import type { AdminUser, AdminJob, AdminCompany, PlatformAnalytics, AdminEmailSettings, PaginatedUsers } from "../types/admin.types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
@@ -54,7 +54,7 @@ export const adminService = {
 
   // Export File Download
   downloadExport: async (resource: string, format: string) => {
-    const token = sessionStorage.getItem("denno_access_token");
+    const token = getAccessToken();
     const res = await fetch(`${API_URL}/admin/export?resource=${resource}&format=${format}`, {
       headers: {
         Authorization: `Bearer ${token}`

@@ -8,7 +8,7 @@ import CVDiffModal from "../../components/CVDiffModal";
 import CVStyledPreview from "../../components/CVStyledPreview";
 import StructuredCVEditor from "../../components/StructuredCVEditor";
 import { cvService } from "../../services/cv.service";
-import { api } from "../../services/api";
+import { api, getAccessToken } from "../../services/api";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -109,7 +109,7 @@ export default function CVPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const token = sessionStorage.getItem("denno_access_token");
+      const token = getAccessToken();
       const res = await fetch(`${API_URL}/cv/${selected.id}/upload`, {
         method: "POST",
         headers: {
