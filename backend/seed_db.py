@@ -14,19 +14,19 @@ async def seed():
     async with async_session_factory() as session:
 
         # ── 1. Users ─────────────────────────────────────────────────────────────
-        admin_res = await session.execute(select(User).where(User.email.in_(["deno14619@gmail.com", "admin@denno.com"])))
+        admin_res = await session.execute(select(User).where(User.email.in_(["admin@denno.os", "admin@example.com"])))
         if not admin_res.scalar_one_or_none():
             session.add(User(
-                email="deno14619@gmail.com",
+                email="admin@denno.os",
                 password_hash=hash_password("password123"),
                 first_name="DENNIS", last_name="KOECH", role="admin",
                 title="IT INTERN | ICT SUPPORT | INFORMATION SECURITY & FORENSICS",
                 skills=["Python", "FastAPI", "React", "PostgreSQL", "Cybersecurity", "Network Security"],
                 location="Nairobi, Kenya",
             ))
-            print("Created main admin user: deno14619@gmail.com / password123")
+            print("Created main admin user: admin@denno.os")
 
-        demo_res = await session.execute(select(User).where(User.email.in_(["user@denno.com", "denniskoech584@gmail.com"])))
+        demo_res = await session.execute(select(User).where(User.email.in_(["user@denno.com", "user@example.com"])))
         if not demo_res.scalar_one_or_none():
             session.add(User(
                 email="user@denno.com",
@@ -42,7 +42,7 @@ async def seed():
                 ],
                 years_experience=1, location="Nairobi, Kenya",
             ))
-            print("Created demo user Dennis Kibet Koech: user@denno.com / password123")
+            print("Created demo user: user@denno.com")
 
         # ── 2. Companies (24 total) ───────────────────────────────────────────────
         comp_data = [

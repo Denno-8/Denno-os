@@ -70,7 +70,7 @@ export const COLOR_THEMES: ThemeColor[] = [
 // ── Sample CVs (role-specific templates) ──
 const SAMPLE_CV_DENNIS: CVData = {
   fullName: "DENNIS KIBET KOECH",
-  email: "deno14619@gmail.com",
+  email: "dennis.koech@example.com",
   phone: "+254 716 949 061",
   location: "Nairobi, Kenya",
   linkedin: "linkedin.com/in/dennis-kibet-koech",

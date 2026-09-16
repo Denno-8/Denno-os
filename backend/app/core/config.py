@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     bot_shield_enabled: bool = Field(default=True, alias="BOT_SHIELD_ENABLED")
 
     # Admin configuration — comma-separated list of emails auto-assigned role=admin
-    admin_emails_raw: str = Field(default="deno14619@gmail.com", alias="ADMIN_EMAILS")
+    admin_emails_raw: str = Field(default="admin@denno.os,admin@example.com", alias="ADMIN_EMAILS")
 
 
     # AI / LLM Providers

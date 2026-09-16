@@ -773,7 +773,7 @@ class EmailService:
         elif not recruiter_email:
             smtp_error_msg = "Recruiter email is missing."
         elif not has_smtp_creds:
-            smtp_error_msg = "SMTP credentials missing: Please add SMTP_USER (e.g. deno14619@gmail.com) and SMTP_PASSWORD (16-char Google App Password) in your Render environment variables."
+            smtp_error_msg = "SMTP credentials missing: Please add SMTP_USER (e.g. your-email@gmail.com) and SMTP_PASSWORD (16-char Google App Password) in your Render environment variables."
         else:
             def _do_send_smtp(target_rec_email: str, target_rec_domain: str):
                 import socket

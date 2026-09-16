@@ -258,7 +258,7 @@ export default function ApplicationsPage() {
             onClick={handleSyncResponses}
             disabled={isSyncingResponses}
             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-extrabold px-3.5 py-2.5 shadow-md transition-all hover:scale-[1.02] disabled:opacity-50"
-            title="Connects to deno14619@gmail.com via IMAP to sync recruiter responses, confirmation emails & interview invites"
+            title="Connects to configured email via IMAP to sync recruiter responses, confirmation emails & interview invites"
           >
             <RefreshCw size={15} className={isSyncingResponses ? "animate-spin text-white" : "text-emerald-200"} />
             <span>{isSyncingResponses ? "Syncing Inbox…" : "Sync Recruiter Responses"}</span>
