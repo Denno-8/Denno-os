@@ -505,7 +505,8 @@ class EmailService:
             def _do_send_smtp(target_rec_email: str, target_rec_domain: str):
                 if target_rec_domain:
                     try:
-                        socket.gethostbyname(target_rec_domain)
+                        safe_domain = target_rec_domain.encode('idna').decode('ascii')
+                        socket.gethostbyname(safe_domain)
                     except Exception:
                         pass
 
@@ -550,13 +551,13 @@ class EmailService:
 
                 smtp_pass = settings.smtp_password.replace(" ", "") if settings.smtp_password else ""
 
-                # Multi-Strategy Dispatch (IPv4 TLS 587 -> IPv4 SSL 465 -> Standard 587 -> Standard 465)
+                # Multi-Strategy Fast Dispatch (IPv4 TLS 587 -> IPv4 SSL 465 -> Standard 587 -> Standard 465)
                 send_success = False
                 errors = []
 
-                # 1. Try IPv4 TLS 587
+                # 1. Try IPv4 TLS 587 (5s timeout)
                 try:
-                    with IPv4SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
+                    with IPv4SMTP(settings.smtp_host, settings.smtp_port, timeout=5) as server:
                         server.starttls()
                         server.login(settings.smtp_user, smtp_pass)
                         server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
@@ -564,21 +565,21 @@ class EmailService:
                 except Exception as err1:
                     errors.append(err1)
 
-                # 2. Try IPv4 SSL 465 fallback
+                # 2. Try IPv4 SSL 465 fallback (5s timeout)
                 if not send_success:
                     try:
                         smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
-                        with IPv4SMTP_SSL(smtp_ssl_host, 465, timeout=12) as server_ssl:
+                        with IPv4SMTP_SSL(smtp_ssl_host, 465, timeout=5) as server_ssl:
                             server_ssl.login(settings.smtp_user, smtp_pass)
                             server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                             send_success = True
                     except Exception as err2:
                         errors.append(err2)
 
-                # 3. Try Standard TLS 587 fallback
+                # 3. Try Standard TLS 587 fallback (5s timeout)
                 if not send_success:
                     try:
-                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
+                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=5) as server:
                             server.starttls()
                             server.login(settings.smtp_user, smtp_pass)
                             server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
@@ -586,11 +587,11 @@ class EmailService:
                     except Exception as err3:
                         errors.append(err3)
 
-                # 4. Try Standard SSL 465 fallback
+                # 4. Try Standard SSL 465 fallback (5s timeout)
                 if not send_success:
                     try:
                         smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
-                        with smtplib.SMTP_SSL(smtp_ssl_host, 465, timeout=12) as server_ssl:
+                        with smtplib.SMTP_SSL(smtp_ssl_host, 465, timeout=5) as server_ssl:
                             server_ssl.login(settings.smtp_user, smtp_pass)
                             server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                             send_success = True
@@ -603,6 +604,10 @@ class EmailService:
                     if auth_err:
                         raise Exception("Gmail SMTP Authentication failed: Please verify your SMTP_USER and ensure you are using a 16-character Gmail App Password (myaccount.google.com/apppasswords).")
 
+                    timeout_err = next((e for e in errors if isinstance(e, (socket.timeout, TimeoutError)) or "timed out" in str(e).lower()), None)
+                    if timeout_err:
+                        raise Exception("SMTP connection timed out: Please check your internet connection or verify your SMTP server settings.")
+
                     non_net_err = next((e for e in errors if "101" not in str(e) and "unreachable" not in str(e).lower()), None)
                     if non_net_err:
                         raise non_net_err
@@ -611,15 +616,15 @@ class EmailService:
                         raise errors[0]
                     raise Exception("Failed to establish SMTP connection to email server.")
 
-                # Save copy to IMAP Sent Mail folder
+                # Save copy to IMAP Sent Mail folder (with 6s timeout so it never blocks)
                 try:
                     imap_user = settings.smtp_user
                     if imap_user and smtp_pass:
                         imap_host = "imap.gmail.com" if "gmail" in imap_user else getattr(settings, "imap_host", "imap.gmail.com")
                         try:
-                            imap_server = IPv4IMAP4_SSL(imap_host, 993)
+                            imap_server = IPv4IMAP4_SSL(imap_host, 993, timeout=6)
                         except Exception:
-                            imap_server = imaplib.IMAP4_SSL(imap_host, 993)
+                            imap_server = imaplib.IMAP4_SSL(imap_host, 993, timeout=6)
 
                         with imap_server:
                             imap_server.login(imap_user, smtp_pass)
