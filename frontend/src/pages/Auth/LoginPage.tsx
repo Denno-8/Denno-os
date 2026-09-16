@@ -126,14 +126,15 @@ export default function LoginPage() {
 
   const handleApiError = (err: unknown, fallback: string) => {
     if (err instanceof ApiError) {
-      const d = (err.body as any)?.detail;
-      if (err.status === 401) setError("Invalid email or password. Please try again.");
+      const d = (err.body as any)?.detail || err.message;
+      if (typeof d === "string" && d.trim()) setError(d);
+      else if (err.status === 401) setError("Incorrect email or password. Please try again.");
       else if (err.status === 409) setError("An account with this email already exists. Try signing in.");
       else if (err.status === 422) setError("Please check your inputs — some fields are invalid.");
       else if (err.status === 0) setError("Server cold start timeout. Please wait a moment and try again.");
-      else setError(typeof d === "string" ? d : fallback);
+      else setError(fallback);
     } else {
-      setError("Server cold start in progress. Please wait a moment and try again.");
+      setError("Server connection issue. Please wait a moment and try again.");
     }
   };
 

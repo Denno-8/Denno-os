@@ -69,3 +69,16 @@ def test_to_csv_bytes_flattens_list_fields(mock_db):
     body = service.to_csv_bytes(records).decode("utf-8")
     assert "name" in body and "skills" in body  # header row present
     assert "Safaricom" in body
+
+
+def test_parse_csv_splits_list_fields_for_interviews_and_cv():
+    interview_content = 'application_id,type,behavioral_questions\r\n1,Technical,"Question 1,Question 2"\r\n'
+    interview_rows = DataTransferService.parse_csv(interview_content, "interviews")
+    assert len(interview_rows) == 1
+    assert interview_rows[0]["behavioral_questions"] == ["Question 1", "Question 2"]
+
+    cv_content = 'version_name,skills\r\nExecutive CV,"Python,AWS,Docker"\r\n'
+    cv_rows = DataTransferService.parse_csv(cv_content, "cv")
+    assert len(cv_rows) == 1
+    assert cv_rows[0]["skills"] == ["Python", "AWS", "Docker"]
+

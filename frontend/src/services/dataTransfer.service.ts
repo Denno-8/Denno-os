@@ -102,6 +102,22 @@ export const dataTransferService = {
   /** Auto-dispatches to the right import method based on the file extension. */
   async importFile(resource: string, file: File): Promise<ImportResult> {
     const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext === "json") {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid JSON file formatting.");
+      }
+      const records = Array.isArray(parsed)
+        ? parsed
+        : typeof parsed === "object" && parsed !== null && "records" in parsed && Array.isArray((parsed as any).records)
+        ? (parsed as any).records
+        : [];
+      if (!records.length) throw new Error("JSON file contained no records array.");
+      return this.importJSON(resource, records);
+    }
     if (ext === "xlsx" || ext === "xls") return this.importExcel(resource, file);
     if (ext === "pdf") return this.importPDF(resource, file);
     return this.importCSV(resource, file); // default: csv / txt

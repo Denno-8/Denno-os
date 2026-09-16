@@ -30,6 +30,8 @@ from app.schemas.recruiter import RecruiterCreate
 from app.schemas.cv_version import CVVersionCreate
 from app.schemas.company import CompanyCreate
 from app.schemas.job import JobCreate
+from app.schemas.interview import InterviewCreate
+from app.schemas.email import EmailCreate
 
 from app.services.application_service import ApplicationService
 from app.services.company_service import CompanyService
@@ -48,6 +50,8 @@ _CREATE_SCHEMAS: dict[str, tuple[type, bool]] = {
     "goals": (GoalCreate, True),
     "recruiters": (RecruiterCreate, True),
     "cv": (CVVersionCreate, True),
+    "interviews": (InterviewCreate, True),
+    "emails": (EmailCreate, True),
     "companies": (CompanyCreate, False),
     "jobs": (JobCreate, False),
 }
@@ -268,6 +272,10 @@ class DataTransferService:
                     await self.recruiters.create(user_id, payload)
                 elif resource == "cv":
                     await self.cv_versions.create(user_id, payload)
+                elif resource == "interviews":
+                    await self.interviews.create(user_id, payload)
+                elif resource == "emails":
+                    await self.emails.create(user_id, payload)
                 elif resource == "companies":
                     await self.companies.create(payload)
                 elif resource == "jobs":

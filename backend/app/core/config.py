@@ -165,7 +165,8 @@ class Settings(BaseSettings):
     @property
     def admin_emails(self) -> list[str]:
         """Return ADMIN_EMAILS as a parsed list of lowercased emails."""
-        return [e.strip().lower() for e in self.admin_emails_raw.split(",") if e.strip()]
+        raw = self.admin_emails_raw or ""
+        return [e.strip().lower() for e in str(raw).split(",") if e.strip()]
 
 
 @lru_cache

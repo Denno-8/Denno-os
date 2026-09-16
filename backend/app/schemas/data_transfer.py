@@ -8,6 +8,9 @@ LIST_FIELDS: dict[str, set[str]] = {
     "notes": {"tags"},
     "companies": {"tech_stack"},
     "jobs": {"required_skills"},
+    "recruiters": {"tags"},
+    "cv": {"skills", "bullet_points"},
+    "interviews": {"behavioral_questions", "technical_questions"},
 }
 
 # Resources supported by /export and /import, and whether they're scoped to

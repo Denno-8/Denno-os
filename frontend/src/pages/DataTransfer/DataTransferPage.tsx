@@ -116,10 +116,10 @@ export default function DataTransferPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Upload File <span className="font-normal text-slate-400">(CSV, Excel .xlsx, or PDF)</span></label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Upload File <span className="font-normal text-slate-400">(JSON, CSV, Excel .xlsx, or PDF)</span></label>
             <input
               type="file"
-              accept=".csv,.xlsx,.xls,.pdf"
+              accept=".json,.csv,.xlsx,.xls,.pdf"
               disabled={importing}
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-600 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50 cursor-pointer"
@@ -149,6 +149,7 @@ export default function DataTransferPage() {
           )}
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
             <strong>Supported formats:</strong>{" "}
+            <span className="font-medium text-blue-600 dark:text-blue-400">JSON</span> — array of record objects.{" "}
             <span className="font-medium text-amber-600 dark:text-amber-400">CSV</span> — comma-separated, UTF-8.{" "}
             <span className="font-medium text-green-600 dark:text-green-400">Excel (.xlsx)</span> — first sheet used, first row = headers.{" "}
             <span className="font-medium text-rose-600 dark:text-rose-400">PDF</span> — must contain a table; best used with PDFs exported from this app.{" "}
