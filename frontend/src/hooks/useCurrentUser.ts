@@ -5,7 +5,7 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: ["auth", "me"],
     queryFn: () => authService.me(),
-    staleTime: 5 * 60 * 1000, // role rarely changes mid-session
+    staleTime: 30 * 1000, // 30s stale time so role changes reflect quickly
   });
 }
 

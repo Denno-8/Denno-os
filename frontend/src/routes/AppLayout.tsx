@@ -27,6 +27,7 @@ import {
   ArrowLeft,
   Menu,
   X,
+  Shield,
 } from "lucide-react";
 
 import { authService } from "../services/auth.service";
@@ -370,6 +371,32 @@ export default function AppLayout() {
               <Bell size={18} />
               {unreadCount > 0 && <span style={styles.notifBadge}>{unreadCount}</span>}
             </button>
+
+            {/* Admin Badge */}
+            {isAdmin && (
+              <button
+                onClick={() => navigate("/admin")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: 11,
+                  border: "1px solid rgba(225,29,72,0.35)",
+                  backgroundColor: "rgba(225,29,72,0.15)",
+                  color: "#f43f5e",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  letterSpacing: "0.04em",
+                  transition: "all 0.15s ease",
+                }}
+                title="Open Admin Dashboard"
+              >
+                <Shield size={14} />
+                <span>Admin</span>
+              </button>
+            )}
 
             {/* User avatar */}
             <div style={styles.userBadge} title="Your account">
