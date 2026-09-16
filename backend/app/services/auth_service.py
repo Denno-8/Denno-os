@@ -20,6 +20,8 @@ logger = logging.getLogger("denno.auth")
 
 
 def _serialize_user(user) -> UserOut:
+    user_email = (user.email or "").lower().strip()
+    role = "admin" if (settings.admin_emails and user_email in settings.admin_emails) else (user.role or "user")
     return UserOut(
         id=str(user.id),
         email=user.email,
@@ -44,7 +46,7 @@ def _serialize_user(user) -> UserOut:
         theme=user.theme or "light",
         two_fa_enabled=getattr(user, "two_fa_enabled", False),
         profile_public=getattr(user, "profile_public", False),
-        role=user.role or "user",
+        role=role,
     )
 
 
@@ -149,7 +151,6 @@ class AuthService:
             refresh_token=create_refresh_token(user_id),
         )
 
-
     async def login(self, payload: LoginRequest, client_ip: str = "unknown") -> TokenResponse:
         # ── Bot protection ────────────────────────────────────────────────────
         await self._verify_turnstile(
@@ -233,8 +234,9 @@ class AuthService:
         user_id = str(user.id)
         role = user.role or "user"
         user_email = user.email.lower().strip()
-        if settings.admin_emails and user_email in settings.admin_emails and role != "admin":
-            await self.repo.update_role(user.id, "admin")
+        if settings.admin_emails and user_email in settings.admin_emails:
+            if role != "admin":
+                await self.repo.update_role(user.id, "admin")
             role = "admin"
 
         return TokenResponse(
@@ -246,6 +248,10 @@ class AuthService:
         user = await self.repo.get_by_id(user_id)
         if not user:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        user_email = (user.email or "").lower().strip()
+        if settings.admin_emails and user_email in settings.admin_emails and user.role != "admin":
+            await self.repo.update_role(user.id, "admin")
+            user.role = "admin"
         return _serialize_user(user)
 
     async def request_password_reset(self, email: str) -> None:
