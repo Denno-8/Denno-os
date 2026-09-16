@@ -6,16 +6,16 @@
 
   <!-- Home / Landing page -->
   <url>
-    <loc>https://denno.app/</loc>
-    <lastmod>2025-09-15</lastmod>
+    <loc>https://denno-os.vercel.app/</loc>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <!-- Login — public, indexable -->
   <url>
-    <loc>https://denno.app/login</loc>
-    <lastmod>2025-09-15</lastmod>
+    <loc>https://denno-os.vercel.app/login</loc>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

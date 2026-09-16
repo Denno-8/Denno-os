@@ -30,4 +30,4 @@ Disallow: /auth/
 Crawl-delay: 10
 
 # Sitemap location
-Sitemap: https://denno.app/sitemap.xml
+Sitemap: https://denno-os.vercel.app/sitemap.xml
