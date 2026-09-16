@@ -29,6 +29,7 @@ const RecruitersPage = lazy(() => import("./pages/Recruiters/RecruitersPage"));
 const JobSourcesPage = lazy(() => import("./pages/JobSources/JobSourcesPage"));
 const DataTransferPage = lazy(() => import("./pages/DataTransfer/DataTransferPage"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
+const ResetPasswordPage = lazy(() => import("./pages/Auth/ResetPasswordPage"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/Admin/AdminDashboard"));
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="/" element={<Navigate to={authService.isAuthenticated() ? "/applications" : "/login"} replace />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
               {/* OAuth callback routes — Google and LinkedIn redirect here after consent screen */}
               <Route path="/auth/google/callback" element={<OAuthCallbackPage />} />
