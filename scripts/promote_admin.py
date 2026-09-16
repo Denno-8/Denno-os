@@ -1,7 +1,5 @@
 """
-Promotes a user to admin role directly in Mongo. Deliberately NOT an HTTP
-endpoint — an API route that can create admins is itself a privilege
-escalation risk. Run this from a trusted machine with DB access only.
+Promotes a user to admin role directly in PostgreSQL. Run from CLI.
 
 Usage:
     python scripts/promote_admin.py user@example.com
@@ -10,29 +8,27 @@ import asyncio
 import sys
 from pathlib import Path
 
+# Add backend directory to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
-from app.core.config import settings  # noqa: E402
+from app.database.postgresql import init_db, get_session  # noqa: E402
 from app.repositories.user_repository import UserRepository  # noqa: E402
 
 
 async def promote(email: str) -> None:
-    client = AsyncIOMotorClient(settings.mongo_uri)
-    db = client[settings.mongo_db_name]
-    repo = UserRepository(db)
+    email_clean = email.strip().lower()
+    await init_db()
+    async for db in get_session():
+        repo = UserRepository(db)
+        user = await repo.get_by_email(email_clean)
+        if not user:
+            print(f"[!] No user found with email: {email_clean}")
+            return
 
-    user = await repo.get_by_email(email)
-    if not user:
-        print(f"No user found with email {email}")
-        client.close()
+        await repo.update_role(user.id, "admin")
+        print(f"[OK] User '{email_clean}' (ID: {user.id}) has been promoted to 'admin' role.")
+        print("NOTE: The user must log in again to get a fresh JWT access token with role=admin.")
         return
-
-    await repo.update_role(str(user["_id"]), "admin")
-    print(f"{email} promoted to admin.")
-    print("NOTE: they must log in again to get a fresh access token with role=admin —")
-    print("existing sessions won't pick up the new role until their token is reissued.")
-    client.close()
 
 
 if __name__ == "__main__":

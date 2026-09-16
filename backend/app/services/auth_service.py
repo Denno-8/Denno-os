@@ -132,17 +132,20 @@ class AuthService:
         if existing:
             raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
 
+        user_email = payload.email.lower().strip()
+        role = "admin" if (settings.admin_emails and user_email in settings.admin_emails) else "user"
+
         doc = {
-            "email": payload.email,
+            "email": user_email,
             "password_hash": hash_password(payload.password),
             "first_name": payload.first_name,
             "last_name": payload.last_name,
-            "role": "user",
+            "role": role,
         }
         created = await self.repo.create(doc)
         user_id = str(created.id)
         return TokenResponse(
-            access_token=create_access_token(user_id, role="user"),
+            access_token=create_access_token(user_id, role=role),
             refresh_token=create_refresh_token(user_id),
         )
 
@@ -229,6 +232,11 @@ class AuthService:
 
         user_id = str(user.id)
         role = user.role or "user"
+        user_email = user.email.lower().strip()
+        if settings.admin_emails and user_email in settings.admin_emails and role != "admin":
+            await self.repo.update_role(user.id, "admin")
+            role = "admin"
+
         return TokenResponse(
             access_token=create_access_token(user_id, role=role),
             refresh_token=create_refresh_token(user_id),

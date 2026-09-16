@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # BotShieldMiddleware — set to false only in automated test environments.
     bot_shield_enabled: bool = Field(default=True, alias="BOT_SHIELD_ENABLED")
 
+    # Admin configuration — comma-separated list of emails auto-assigned role=admin
+    admin_emails_raw: str = Field(default="deno14619@gmail.com", alias="ADMIN_EMAILS")
+
 
     # AI / LLM Providers
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
@@ -158,6 +161,11 @@ class Settings(BaseSettings):
     def allowed_hosts(self) -> list[str]:
         """Return ALLOWED_HOSTS as a parsed list."""
         return [h.strip() for h in self.allowed_hosts_raw.split(",") if h.strip()]
+
+    @property
+    def admin_emails(self) -> list[str]:
+        """Return ADMIN_EMAILS as a parsed list of lowercased emails."""
+        return [e.strip().lower() for e in self.admin_emails_raw.split(",") if e.strip()]
 
 
 @lru_cache
