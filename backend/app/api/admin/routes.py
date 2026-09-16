@@ -65,6 +65,30 @@ async def list_users(
     return await service.list_users(skip, limit, q, role, active_status)
 
 
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str = ""
+    last_name: str = ""
+    role: Literal["user", "admin"] = "user"
+    title: str = ""
+    location: str = ""
+    phone: str = ""
+    years_experience: int = 0
+    is_active: bool = True
+
+
+@router.post("/users", status_code=status.HTTP_201_CREATED)
+async def create_user(
+    payload: AdminUserCreate,
+    admin_id: int = Depends(require_admin),
+    service: AdminService = Depends(get_service),
+):
+    """Admin: create a new user account with full profile details."""
+    logger.info("ADMIN AUDIT | Admin id=%s created user '%s'", admin_id, payload.email)
+    return await service.create_user(payload.model_dump())
+
+
 @router.get("/users/{user_id}")
 async def get_user(
     user_id: int,

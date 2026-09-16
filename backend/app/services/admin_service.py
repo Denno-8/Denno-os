@@ -89,6 +89,26 @@ class AdminService:
             "has_more": (skip + limit) < total,
         }
 
+    async def create_user(self, payload: dict) -> dict:
+        email = payload.get("email", "").strip().lower()
+        if not email:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email address is required.")
+        existing = await self.repo.get_user_by_email(email)
+        if existing:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"An account with email '{email}' already exists.")
+        
+        password = payload.pop("password", "")
+        if len(password) < 8:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 8 characters.")
+        
+        from app.core.security import hash_password
+        payload["email"] = email
+        payload["password_hash"] = hash_password(password)
+        
+        u = await self.repo.create_user(payload)
+        app_count = await self.repo.user_application_count(u.id)
+        return _serialize_user(u, app_count)
+
     async def get_user(self, user_id: int) -> dict:
         u = await self.repo.get_user(user_id)
         if not u:

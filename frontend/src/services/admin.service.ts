@@ -15,6 +15,9 @@ export const adminService = {
 
   getUser: (id: number) => api.get<AdminUser>(`/admin/users/${id}`),
 
+  createUser: (payload: Record<string, unknown>) =>
+    api.post<AdminUser>("/admin/users", payload),
+
   updateUserProfile: (id: number, payload: Partial<AdminUser>) =>
     api.patch<AdminUser>(`/admin/users/${id}`, payload),
 

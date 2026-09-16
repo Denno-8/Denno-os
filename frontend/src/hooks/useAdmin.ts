@@ -30,6 +30,14 @@ export function useAdminUser(id: number | null) {
   });
 }
 
+export function useCreateAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown>) => adminService.createUser(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
+  });
+}
+
 export function useUpdateUserProfile() {
   const qc = useQueryClient();
   return useMutation({

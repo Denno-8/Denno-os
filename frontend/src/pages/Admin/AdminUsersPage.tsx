@@ -4,10 +4,11 @@ import {
   Search, Shield, UserX, Trash2, CheckCircle2, FileSpreadsheet,
   FileText, FileCode, ArrowLeft, Edit3, KeyRound, ChevronLeft,
   ChevronRight, Users, AlertTriangle, X, Eye, EyeOff, UserCheck,
-  RefreshCw, Loader2,
+  RefreshCw, Loader2, UserPlus,
 } from "lucide-react";
 import {
   useAdminUsers,
+  useCreateAdminUser,
   useUpdateUserProfile,
   useUpdateUserRole,
   useSuspendUser,
@@ -61,6 +62,178 @@ const Avatar = ({ user }: { user: AdminUser }) => {
     </div>
   );
 };
+
+// ─── Create User Modal ────────────────────────────────────────────────────────
+interface CreateModalProps {
+  onClose: () => void;
+  onCreated: (msg: string) => void;
+}
+
+function CreateUserModal({ onClose, onCreated }: CreateModalProps) {
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    first_name: "",
+    last_name: "",
+    title: "",
+    location: "",
+    phone: "",
+    years_experience: 0,
+    role: "user",
+    is_active: true,
+  });
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState("");
+  const createUser = useCreateAdminUser();
+
+  const set = (field: string, val: unknown) => setForm((f) => ({ ...f, [field]: val }));
+
+  const handleCreate = () => {
+    if (!form.email.trim()) { setError("Email is required."); return; }
+    if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    setError("");
+    createUser.mutate(form, {
+      onSuccess: (u) => onCreated(`User account ${u.email} created successfully!`),
+      onError: (e: unknown) => setError((e as Error).message || "Failed to create user account."),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400 font-extrabold shrink-0">
+            <UserPlus size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-extrabold text-slate-900 dark:text-white">Create New Account</div>
+            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Add a new user or administrator to the platform</div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-700 dark:text-rose-300">
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">First Name</label>
+              <input
+                value={form.first_name}
+                onChange={(e) => set("first_name", e.target.value)}
+                placeholder="Dennis"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Last Name</label>
+              <input
+                value={form.last_name}
+                onChange={(e) => set("last_name", e.target.value)}
+                placeholder="Kariuki"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Email Address *</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
+              placeholder="user@example.com"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Password *</label>
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => set("password", e.target.value)}
+                placeholder="Min. 8 characters"
+                className="w-full px-3 py-2 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+              <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Job Title</label>
+              <input
+                value={form.title}
+                onChange={(e) => set("title", e.target.value)}
+                placeholder="Software Engineer"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Role</label>
+              <select
+                value={form.role}
+                onChange={(e) => set("role", e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Location</label>
+              <input
+                value={form.location}
+                onChange={(e) => set("location", e.target.value)}
+                placeholder="Nairobi, Kenya"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">Phone</label>
+              <input
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                placeholder="+254 700 000000"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex gap-2">
+            <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={createUser.isPending}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {createUser.isPending ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+              Create User
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 interface EditModalProps {
@@ -352,6 +525,7 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(0);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [promoteEmail, setPromoteEmail] = useState("");
@@ -449,6 +623,12 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <UserPlus size={14} /> Add User
+          </button>
           <button
             onClick={() => refetch()}
             className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -686,6 +866,14 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {/* ── Create Modal ── */}
+      {showCreateModal && (
+        <CreateUserModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(msg) => { showToast(msg); setShowCreateModal(false); }}
+        />
+      )}
 
       {/* ── Edit Modal ── */}
       {editUser && (

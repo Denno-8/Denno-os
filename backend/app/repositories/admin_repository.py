@@ -43,6 +43,14 @@ class AdminRepository:
         result = await self.session.execute(select(User).where(User.email == clean_email))
         return result.scalar_one_or_none()
 
+    async def create_user(self, doc: dict) -> User:
+        user = User(**doc)
+        self.session.add(user)
+        await self.session.flush()
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user
+
     async def update_user(self, user_id: int, patch: dict) -> User | None:
         user = await self.get_user(user_id)
         if user:
@@ -55,9 +63,12 @@ class AdminRepository:
         return user
 
     async def delete_user(self, user_id: int) -> bool:
-        result = await self.session.execute(delete(User).where(User.id == user_id))
-        await self.session.commit()
-        return result.rowcount > 0
+        user = await self.get_user(user_id)
+        if user:
+            await self.session.delete(user)
+            await self.session.commit()
+            return True
+        return False
 
     async def count_users_filtered(self, q: str = "", role: str = "", active_status: str = "") -> int:
         stmt = select(func.count(User.id))
