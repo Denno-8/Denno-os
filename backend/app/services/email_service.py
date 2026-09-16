@@ -550,9 +550,9 @@ class EmailService:
 
                 smtp_pass = settings.smtp_password.replace(" ", "") if settings.smtp_password else ""
 
-                # Multi-Strategy Dispatch (IPv4 TLS 587 -> Standard 587 -> IPv4 SSL 465 -> Standard 465)
+                # Multi-Strategy Dispatch (IPv4 TLS 587 -> IPv4 SSL 465 -> Standard 587 -> Standard 465)
                 send_success = False
-                last_err = None
+                errors = []
 
                 # 1. Try IPv4 TLS 587
                 try:
@@ -562,20 +562,9 @@ class EmailService:
                         server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                         send_success = True
                 except Exception as err1:
-                    last_err = err1
+                    errors.append(err1)
 
-                # 2. Try Standard TLS 587 fallback
-                if not send_success:
-                    try:
-                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
-                            server.starttls()
-                            server.login(settings.smtp_user, smtp_pass)
-                            server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
-                            send_success = True
-                    except Exception as err2:
-                        last_err = err2
-
-                # 3. Try IPv4 SSL 465 fallback
+                # 2. Try IPv4 SSL 465 fallback
                 if not send_success:
                     try:
                         smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
@@ -583,8 +572,19 @@ class EmailService:
                             server_ssl.login(settings.smtp_user, smtp_pass)
                             server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                             send_success = True
+                    except Exception as err2:
+                        errors.append(err2)
+
+                # 3. Try Standard TLS 587 fallback
+                if not send_success:
+                    try:
+                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
+                            server.starttls()
+                            server.login(settings.smtp_user, smtp_pass)
+                            server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
+                            send_success = True
                     except Exception as err3:
-                        last_err = err3
+                        errors.append(err3)
 
                 # 4. Try Standard SSL 465 fallback
                 if not send_success:
@@ -595,9 +595,21 @@ class EmailService:
                             server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                             send_success = True
                     except Exception as err4:
-                        if last_err:
-                            raise last_err
-                        raise err4
+                        errors.append(err4)
+
+                if not send_success:
+                    # Select best error to present to user
+                    auth_err = next((e for e in errors if isinstance(e, smtplib.SMTPAuthenticationError) or "535" in str(e) or "authentication" in str(e).lower()), None)
+                    if auth_err:
+                        raise Exception("Gmail SMTP Authentication failed: Please verify your SMTP_USER and ensure you are using a 16-character Gmail App Password (myaccount.google.com/apppasswords).")
+
+                    non_net_err = next((e for e in errors if "101" not in str(e) and "unreachable" not in str(e).lower()), None)
+                    if non_net_err:
+                        raise non_net_err
+
+                    if errors:
+                        raise errors[0]
+                    raise Exception("Failed to establish SMTP connection to email server.")
 
                 # Save copy to IMAP Sent Mail folder
                 try:
