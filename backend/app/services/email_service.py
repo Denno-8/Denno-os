@@ -2,7 +2,9 @@ from typing import List, Dict, Any
 import io
 import uuid
 import smtplib
+import imaplib
 import socket
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
@@ -14,7 +16,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.email_repository import EmailRepository
 from app.schemas.email import EmailCreate, EmailUpdate
 from app.core.config import settings
-from app.models.sqlalchemy_models import Application, Interview, CalendarEvent, Recruiter
+from app.models.sqlalchemy_models import Application, Interview, CalendarEvent, Recruiter, User
+
+
+def create_ipv4_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
+    """
+    Explicitly forces socket connection via IPv4 (socket.AF_INET) to bypass Windows dual-stack
+    IPv6 unreachable route socket failures ([Errno 101] / [WinError 10051]).
+    """
+    host, port = address
+    err = None
+    for res in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM):
+        af, socktype, proto, canonname, sa = res
+        sock = None
+        try:
+            sock = socket.socket(af, socktype, proto)
+            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT and timeout is not None:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sa)
+            return sock
+        except socket.error as _:
+            err = _
+            if sock is not None:
+                sock.close()
+    if err is not None:
+        raise err
+    else:
+        raise socket.error("getaddrinfo returned an empty result for IPv4")
+
+
+class IPv4SMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        return create_ipv4_connection((host, port), timeout, self.source_address)
+
+
+class IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        new_socket = create_ipv4_connection((host, port), timeout, self.source_address)
+        return self.context.wrap_socket(new_socket, server_hostname=self._host)
+
+
+class IPv4IMAP4_SSL(imaplib.IMAP4_SSL):
+    def open(self, host='', port=993, timeout=None):
+        self.host = host
+        self.port = port
+        self.sock = create_ipv4_connection((host, port), timeout)
+        self.sock = self.ssl_context.wrap_socket(self.sock, server_hostname=host)
+        self.file = self.sock.makefile('rb')
 
 
 def _serialize(email) -> dict:
@@ -278,9 +328,13 @@ class EmailService:
     def __init__(self, db: AsyncSession):
         self.repo = EmailRepository(db)
 
-    async def list(self, user_id: int) -> list[dict]:
-        emails = await self.repo.list_for_user(user_id)
+    async def list(self, user_id: int, unread_only: bool = False, skip: int = 0, limit: int = 100) -> list[dict]:
+        emails = await self.repo.list_for_user(user_id, unread_only=unread_only, skip=skip, limit=limit)
         return [_serialize(email) for email in emails]
+
+    async def unread_count(self, user_id: int) -> int:
+        emails = await self.repo.list_for_user(user_id, unread_only=True)
+        return len(emails)
 
     async def get(self, email_id: int, user_id: int) -> dict | None:
         email = await self.repo.get_by_id(email_id, user_id)
@@ -313,48 +367,77 @@ class EmailService:
         role_title: str,
         cover_letter: str,
         cv_snapshot: dict | None = None,
-        application_id: int | None = None
+        app_letter_snapshot: dict | None = None,
+        app_letter_text: str | None = None,
+        application_id: int | None = None,
+        applicant_info: dict | None = None,
     ) -> dict:
         """
         Dispatches an official job application email with PDF attachments (Resume, Cover Letter, Application Letter).
-        Supports multi-port SMTP fallback (587 TLS / 465 SSL), stores a copy in Gmail Sent Mail via IMAP,
+        Supports multi-port IPv4 SMTP fallback (587 TLS / 465 SSL), stores a copy in Gmail Sent Mail via IMAP,
         and logs the record into the database.
         """
         import re
-        from app.models.sqlalchemy_models import User
-        from app.services.cv_service import CVService
 
         # ── 1. Fetch User details for email header & signature ──
-        user_res = await self.repo.session.execute(select(User).where(User.id == user_id))
-        current_user = user_res.scalar_one_or_none()
+        applicant_name = None
+        applicant_email = None
+        applicant_phone = None
+        applicant_location = None
 
-        applicant_name = f"{current_user.first_name} {current_user.last_name}".strip() if current_user else "Job Candidate"
-        applicant_email = current_user.email if current_user else settings.smtp_from_email
-        applicant_phone = getattr(current_user, "phone", "")
-        applicant_location = getattr(current_user, "location", "")
+        if applicant_info and isinstance(applicant_info, dict):
+            applicant_name = applicant_info.get("name")
+            applicant_email = applicant_info.get("email")
+            applicant_phone = applicant_info.get("phone")
+            applicant_location = applicant_info.get("location")
 
-        clean_applicant_filename = re.sub(r'[^a-zA-Z0-9]', '_', applicant_name or "Applicant")
+        if not applicant_name or not applicant_email:
+            user_res = await self.repo.session.execute(select(User).where(User.id == user_id))
+            current_user = user_res.scalars().first()
+            if current_user:
+                full_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+                applicant_name = applicant_name or full_name or current_user.email.split("@")[0].title()
+                applicant_email = applicant_email or current_user.email
+                applicant_phone = applicant_phone or getattr(current_user, "phone", "")
+                applicant_location = applicant_location or getattr(current_user, "location", "")
+
+        applicant_name = applicant_name or "Job Candidate"
+        applicant_email = applicant_email or settings.smtp_from_email or "candidate@denno.com"
+        applicant_phone = applicant_phone or ""
+        applicant_location = applicant_location or "Nairobi, Kenya"
+
+        clean_applicant_filename = re.sub(r'[^a-zA-Z0-9]', '_', applicant_name)
 
         # ── 2. Build Cover Letter & Application Letter PDFs ──
+        effective_app_letter = app_letter_text or (app_letter_snapshot.get("content") if isinstance(app_letter_snapshot, dict) else None) or cover_letter
+
         cover_pdf_bytes = _generate_cover_letter_pdf(
             applicant_name, applicant_email, applicant_phone, applicant_location,
             company_name, role_title, cover_letter
         )
         app_letter_pdf_bytes = _generate_application_letter_pdf(
             applicant_name, applicant_email, applicant_phone, applicant_location,
-            company_name, role_title, cover_letter
+            company_name, role_title, effective_app_letter
         )
 
-        # ── 3. Build Resume PDF ──
+        # ── 3. Build Resume PDF using CVVersionService ──
         cv_pdf_bytes = None
         try:
-            cv_svc = CVService(self.repo.session)
-            cv_pdf_bytes = await cv_svc.generate_pdf_bytes(
-                user_id=user_id,
-                theme_name="Sapphire",
-                cv_snapshot=cv_snapshot,
-                applicant_name=applicant_name
-            )
+            from app.services.cv_version_service import CVVersionService
+            cv_svc = CVVersionService(self.repo.session)
+            target_cv_id = None
+            if cv_snapshot and isinstance(cv_snapshot, dict) and cv_snapshot.get("cv_id"):
+                try:
+                    target_cv_id = int(cv_snapshot["cv_id"])
+                except ValueError:
+                    pass
+            if not target_cv_id:
+                user_cvs = await cv_svc.list(user_id)
+                if user_cvs:
+                    target_cv_id = int(user_cvs[0]["id"])
+
+            if target_cv_id:
+                cv_pdf_bytes = await cv_svc.export_pdf(cv_id=target_cv_id, user_id=user_id, theme_name="Sapphire")
         except Exception as cv_err:
             print(f"Resume PDF generation note: {cv_err}")
 
@@ -362,19 +445,24 @@ class EmailService:
         subject = f"Application for {role_title} Position — {applicant_name}"
         letter_summary = cover_letter.strip() if cover_letter else f"Dear Hiring Team at {company_name},\n\nI am writing to express my strong interest in the {role_title} position at {company_name}."
 
-        plain_body = f"Dear Hiring Team at {company_name},\n\n" \
-                     f"Please accept my formal job application for the {role_title} position.\n\n" \
-                     f"{letter_summary}\n\n" \
-                     f"Enclosed with this email are my official documents in PDF format:\n" \
-                     f"- Resume_{clean_applicant_filename}.pdf\n" \
-                     f"- Application_Letter_{clean_applicant_filename}.pdf\n" \
-                     f"- Cover_Letter_{clean_applicant_filename}.pdf\n\n" \
-                     f"Thank you for your time and consideration. I look forward to discussing my application.\n\n" \
-                     f"Best regards,\n" \
-                     f"{applicant_name}\n" \
-                     f"{applicant_email}{f' | {applicant_phone}' if applicant_phone else ''}"
+        plain_body = (
+            f"Dear Hiring Team at {company_name},\n\n"
+            f"Please accept my formal job application for the {role_title} position.\n\n"
+            f"{letter_summary}\n\n"
+            f"Enclosed with this email are my official documents in PDF format:\n"
+            f"- Resume_{clean_applicant_filename}.pdf\n"
+            f"- Application_Letter_{clean_applicant_filename}.pdf\n"
+            f"- Cover_Letter_{clean_applicant_filename}.pdf\n\n"
+            f"Thank you for your time and consideration. I look forward to discussing my application.\n\n"
+            f"Best regards,\n"
+            f"{applicant_name}\n"
+            f"{applicant_email}{f' | {applicant_phone}' if applicant_phone else ''}"
+        )
 
-        formatted_paragraphs = "".join([f"<p style='margin-bottom: 12px; line-height: 1.6;'>{line.strip()}</p>" for line in letter_summary.split("\n") if line.strip()])
+        formatted_paragraphs = "".join([
+            f"<p style='margin-bottom: 12px; line-height: 1.6;'>{line.strip()}</p>"
+            for line in letter_summary.split("\n") if line.strip()
+        ])
         html_body = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -398,7 +486,7 @@ class EmailService:
 </body>
 </html>"""
 
-        # ── 5. Robust Multi-Port SMTP Dispatch ──
+        # ── 5. Robust Multi-Port IPv4 SMTP & IMAP Dispatch ──
         sent_status = False
         smtp_error_msg = None
 
@@ -462,12 +550,13 @@ class EmailService:
 
                 smtp_pass = settings.smtp_password.replace(" ", "") if settings.smtp_password else ""
 
-                # Multi-Strategy Dispatch (TLS 587 -> SSL 465)
+                # Multi-Strategy Dispatch (IPv4 TLS 587 -> Standard 587 -> IPv4 SSL 465 -> Standard 465)
                 send_success = False
                 last_err = None
 
+                # 1. Try IPv4 TLS 587
                 try:
-                    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
+                    with IPv4SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
                         server.starttls()
                         server.login(settings.smtp_user, smtp_pass)
                         server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
@@ -475,6 +564,29 @@ class EmailService:
                 except Exception as err1:
                     last_err = err1
 
+                # 2. Try Standard TLS 587 fallback
+                if not send_success:
+                    try:
+                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=12) as server:
+                            server.starttls()
+                            server.login(settings.smtp_user, smtp_pass)
+                            server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
+                            send_success = True
+                    except Exception as err2:
+                        last_err = err2
+
+                # 3. Try IPv4 SSL 465 fallback
+                if not send_success:
+                    try:
+                        smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
+                        with IPv4SMTP_SSL(smtp_ssl_host, 465, timeout=12) as server_ssl:
+                            server_ssl.login(settings.smtp_user, smtp_pass)
+                            server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
+                            send_success = True
+                    except Exception as err3:
+                        last_err = err3
+
+                # 4. Try Standard SSL 465 fallback
                 if not send_success:
                     try:
                         smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
@@ -482,19 +594,22 @@ class EmailService:
                             server_ssl.login(settings.smtp_user, smtp_pass)
                             server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
                             send_success = True
-                    except Exception as err2:
+                    except Exception as err4:
                         if last_err:
                             raise last_err
-                        raise err2
+                        raise err4
 
                 # Save copy to IMAP Sent Mail folder
                 try:
-                    import imaplib
-                    import time
                     imap_user = settings.smtp_user
                     if imap_user and smtp_pass:
                         imap_host = "imap.gmail.com" if "gmail" in imap_user else getattr(settings, "imap_host", "imap.gmail.com")
-                        with imaplib.IMAP4_SSL(imap_host, 993) as imap_server:
+                        try:
+                            imap_server = IPv4IMAP4_SSL(imap_host, 993)
+                        except Exception:
+                            imap_server = imaplib.IMAP4_SSL(imap_host, 993)
+
+                        with imap_server:
                             imap_server.login(imap_user, smtp_pass)
                             for sent_folder in ['"[Gmail]/Sent Mail"', 'Sent', 'SENT', '"Sent Messages"']:
                                 try:
@@ -562,7 +677,6 @@ class EmailService:
         (Confirmed / Assessment / Interview / Offer), creates Interview & Calendar entries,
         and dispatches notifications.
         """
-        import imaplib
         import email
         from email.header import decode_header
         import asyncio
@@ -586,7 +700,11 @@ class EmailService:
         def _do_imap_sync():
             nonlocal synced_count, imap_error_msg
             try:
-                mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+                try:
+                    mail = IPv4IMAP4_SSL("imap.gmail.com", 993)
+                except Exception:
+                    mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+
                 mail.login(user_email, password)
                 mail.select("inbox")
 
@@ -605,7 +723,7 @@ class EmailService:
                     for response_part in data:
                         if isinstance(response_part, tuple):
                             msg = email.message_from_bytes(response_part[1])
-                            
+
                             raw_subj = msg.get("Subject", "")
                             subject = ""
                             if raw_subj:
@@ -657,7 +775,7 @@ class EmailService:
                             if matched_app:
                                 from app.services.email_classifier_service import EmailClassifierService
                                 classified = EmailClassifierService.classify_email(subject, body, from_addr)
-                                
+
                                 new_stage = classified.get("recommended_stage")
                                 category = classified.get("category", "Application Received")
                                 action = classified.get("recommended_action", "Review recruiter email.")
@@ -772,7 +890,6 @@ class EmailService:
         with rate-limiting delays to prevent spam domain blacklisting.
         """
         import asyncio
-        from app.models.sqlalchemy_models import ApplicationStage
 
         dispatched = []
         errors = []
@@ -787,7 +904,7 @@ class EmailService:
         for app in apps:
             recruiter_email = app.recruiter_email or f"careers@{app.company_name.lower().replace(' ', '')}.com"
             cover_letter = app.notes or f"Dear Hiring Team at {app.company_name},\n\nPlease accept my application for the {app.role} position."
-            
+
             try:
                 out = await self.send_application_email(
                     user_id=user_id,
@@ -796,26 +913,22 @@ class EmailService:
                     role_title=app.role,
                     cover_letter=cover_letter,
                     cv_snapshot=app.cv_snapshot,
+                    app_letter_snapshot=getattr(app, "app_letter_snapshot", None),
                     application_id=app.id
                 )
-                app.stage = ApplicationStage.APPLIED
-                dispatched.append({
-                    "application_id": app.id,
-                    "company_name": app.company_name,
-                    "role": app.role,
-                    "status": "Dispatched" if out.get("email_sent") else "Queued (Saved to Pipeline)",
-                    "smtp_error": out.get("smtp_error")
-                })
+                if out.get("email_sent"):
+                    dispatched.append(app.id)
+                else:
+                    errors.append({"app_id": app.id, "error": out.get("smtp_error", "Unknown error")})
             except Exception as e:
-                errors.append({"application_id": app.id, "error": str(e)})
+                errors.append({"app_id": app.id, "error": str(e)})
 
-            await asyncio.sleep(2.0)
-
-        await self.repo.session.commit()
+            await asyncio.sleep(1.0)
 
         return {
             "total_requested": len(application_ids),
-            "dispatched_count": len(dispatched),
-            "dispatched": dispatched,
+            "sent_count": len(dispatched),
+            "failed_count": len(errors),
+            "dispatched_ids": dispatched,
             "errors": errors
         }
