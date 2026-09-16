@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { authService } from "../services/auth.service";
+
+vi.mock("../services/api", () => ({
+  api: {
+    post: vi.fn().mockResolvedValue({ message: "Logged out" }),
+    get: vi.fn().mockResolvedValue({}),
+    patch: vi.fn().mockResolvedValue({}),
+    put: vi.fn().mockResolvedValue({}),
+    delete: vi.fn().mockResolvedValue({}),
+  },
+}));
 
 // Valid base64 JWT with exp in the future
 const futureExp = Math.floor(Date.now() / 1000) + 3600;
