@@ -14,17 +14,17 @@ async def seed():
     async with async_session_factory() as session:
 
         # ── 1. Users ─────────────────────────────────────────────────────────────
-        admin_res = await session.execute(select(User).where(User.email == "admin@denno.com"))
+        admin_res = await session.execute(select(User).where(User.email.in_(["deno14619@gmail.com", "admin@denno.com"])))
         if not admin_res.scalar_one_or_none():
             session.add(User(
-                email="admin@denno.com",
+                email="deno14619@gmail.com",
                 password_hash=hash_password("password123"),
-                first_name="Admin", last_name="User", role="admin",
-                title="Platform Administrator",
-                skills=["Python", "FastAPI", "React", "PostgreSQL", "System Architecture"],
+                first_name="DENNIS", last_name="KOECH", role="admin",
+                title="IT INTERN | ICT SUPPORT | INFORMATION SECURITY & FORENSICS",
+                skills=["Python", "FastAPI", "React", "PostgreSQL", "Cybersecurity", "Network Security"],
                 location="Nairobi, Kenya",
             ))
-            print("Created admin user: admin@denno.com / password123")
+            print("Created main admin user: deno14619@gmail.com / password123")
 
         demo_res = await session.execute(select(User).where(User.email.in_(["user@denno.com", "denniskoech584@gmail.com"])))
         if not demo_res.scalar_one_or_none():

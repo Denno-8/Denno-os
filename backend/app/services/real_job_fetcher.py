@@ -641,7 +641,7 @@ class RealJobFetcher:
         r_kenya = await self.fetch_jobs_opened_kenya()
 
         aggregator = RealJobAggregatorService(self.db)
-        agg_result = await aggregator.sync_all_live_jobs()
+        agg_result = await aggregator.sync_all_live_jobs(force=True)
 
         total_added = r_remotive.get("added", 0) + r_arbeitnow.get("added", 0) + r_campusbizz.get("added", 0) + r_kenya.get("added", 0) + agg_result.get("added_count", 0)
         logger.info("Real job sync finished: %d new jobs added, %d expired jobs swept across all feeds.", total_added, expired_count)
