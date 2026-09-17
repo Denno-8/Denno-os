@@ -579,29 +579,41 @@ class EmailService:
 
                 smtp_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
 
+                # Increased socket connection timeout to 15s for cloud environments (Render)
+                SOCKET_CONN_TIMEOUT = 15
+                SOCKET_DATA_TIMEOUT = 30
+
                 for mode, port in strategies:
                     if send_success:
                         break
                     try:
                         if mode == "IPv4_TLS":
-                            with IPv4SMTP(smtp_host, port, timeout=6) as server:
+                            with IPv4SMTP(smtp_host, port, timeout=SOCKET_CONN_TIMEOUT) as server:
                                 server.starttls()
+                                if hasattr(server, "sock") and server.sock:
+                                    server.sock.settimeout(SOCKET_DATA_TIMEOUT)
                                 server.login(settings.smtp_user, smtp_pass)
                                 server.sendmail(sender_email, recipients, msg.as_string())
                                 send_success = True
                         elif mode == "IPv4_SSL":
-                            with IPv4SMTP_SSL(smtp_host, port, timeout=6) as server_ssl:
+                            with IPv4SMTP_SSL(smtp_host, port, timeout=SOCKET_CONN_TIMEOUT) as server_ssl:
+                                if hasattr(server_ssl, "sock") and server_ssl.sock:
+                                    server_ssl.sock.settimeout(SOCKET_DATA_TIMEOUT)
                                 server_ssl.login(settings.smtp_user, smtp_pass)
                                 server_ssl.sendmail(sender_email, recipients, msg.as_string())
                                 send_success = True
                         elif mode == "STD_TLS":
-                            with smtplib.SMTP(smtp_host, port, timeout=6) as server:
+                            with smtplib.SMTP(smtp_host, port, timeout=SOCKET_CONN_TIMEOUT) as server:
                                 server.starttls()
+                                if hasattr(server, "sock") and server.sock:
+                                    server.sock.settimeout(SOCKET_DATA_TIMEOUT)
                                 server.login(settings.smtp_user, smtp_pass)
                                 server.sendmail(sender_email, recipients, msg.as_string())
                                 send_success = True
                         elif mode == "STD_SSL":
-                            with smtplib.SMTP_SSL(smtp_host, port, timeout=6) as server_ssl:
+                            with smtplib.SMTP_SSL(smtp_host, port, timeout=SOCKET_CONN_TIMEOUT) as server_ssl:
+                                if hasattr(server_ssl, "sock") and server_ssl.sock:
+                                    server_ssl.sock.settimeout(SOCKET_DATA_TIMEOUT)
                                 server_ssl.login(settings.smtp_user, smtp_pass)
                                 server_ssl.sendmail(sender_email, recipients, msg.as_string())
                                 send_success = True
@@ -615,7 +627,7 @@ class EmailService:
 
                     timeout_err = next((e for e in errors if isinstance(e, (socket.timeout, TimeoutError)) or "timed out" in str(e).lower()), None)
                     if timeout_err:
-                        raise Exception("SMTP connection timed out: Please check your internet connection or verify your SMTP server settings.")
+                        raise Exception("SMTP connection timed out: Outbound port 587/465 timed out. Saved application to local outbox log for retry.")
 
                     non_net_err = next((e for e in errors if "101" not in str(e) and "unreachable" not in str(e).lower()), None)
                     if non_net_err:
