@@ -254,20 +254,32 @@ class AuthService:
             user.role = "admin"
         return _serialize_user(user)
 
-    async def request_password_reset(self, email: str) -> None:
+    async def request_password_reset(self, email: str) -> dict:
         user = await self.repo.get_by_email(email)
         if not user:
             # Always return silently — prevents email enumeration
-            return
+            return {"message": "If that email exists, a reset link has been sent to your inbox.", "email_sent": False}
+
         token = create_reset_token(str(user.id))
-        logger.info("Password reset token issued for user_id=%s", user.id)
+        reset_link = f"{settings.frontend_origin}/reset-password?token={token}"
+        logger.info("Password reset token issued for user_id=%s: %s", user.id, reset_link)
+
+        email_sent = False
         try:
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
             await send_password_reset(user.email, token, first_name)
             logger.info("Password reset email dispatched for user_id=%s", user.id)
+            email_sent = True
         except Exception as exc:
             logger.error("Failed to send password reset email for user_id=%s: %s", user.id, exc)
+
+        return {
+            "message": "If that email exists, a reset link has been sent to your inbox.",
+            "reset_token": token,
+            "reset_link": reset_link,
+            "email_sent": email_sent,
+        }
 
     async def confirm_password_reset(self, token: str, new_password: str) -> None:
         try:

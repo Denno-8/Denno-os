@@ -145,5 +145,12 @@ class PasswordResetConfirm(BaseModel):
         return _validate_password_strength(v)
 
 
+class PasswordResetResponse(BaseModel):
+    message: str
+    reset_token: str | None = None
+    reset_link: str | None = None
+    email_sent: bool = False
+
+
 class MessageResponse(BaseModel):
     message: str

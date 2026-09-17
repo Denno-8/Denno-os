@@ -143,8 +143,14 @@ export default function LoginPage() {
     try {
       if (mode === "login")    { await authService.login(email, password); queryClient.clear(); navigate("/applications"); }
       else if (mode === "register") { await authService.register(email, password, firstName, lastName); queryClient.clear(); navigate("/applications"); }
-      else if (mode === "forgot")   { const r = await authService.requestPasswordReset(email); setInfo(r.message); }
-      else if (mode === "reset")    { const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login"); }
+      else if (mode === "forgot") {
+        const r = await authService.requestPasswordReset(email);
+        setInfo(r.message);
+        if (r.reset_token) {
+          setResetToken(r.reset_token);
+        }
+      }
+      else if (mode === "reset") { const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login"); }
     } catch (e) { handleApiError(e, "Something went wrong. Check your details."); }
     finally { setLoading(false); }
   };
@@ -498,9 +504,36 @@ export default function LoginPage() {
               </div>
             )}
             {info && (
-              <div style={{ padding:"10px 14px", borderRadius:"12px", background:"rgba(16,185,129,0.1)", border:"1px solid rgba(16,185,129,0.3)", display:"flex", gap:"8px", alignItems:"flex-start" }}>
-                <CheckCircle2 size={15} style={{color:"#059669",flexShrink:0,marginTop:"1px"}} />
-                <span style={{ fontSize:"13.5px", fontWeight:700, color:"#059669", lineHeight:1.5 }}>{info}</span>
+              <div style={{ padding:"12px 14px", borderRadius:"12px", background:"rgba(16,185,129,0.1)", border:"1px solid rgba(16,185,129,0.3)", display:"flex", flexDirection:"column", gap:"8px" }}>
+                <div style={{ display:"flex", gap:"8px", alignItems:"flex-start" }}>
+                  <CheckCircle2 size={15} style={{color:"#059669",flexShrink:0,marginTop:"1px"}} />
+                  <span style={{ fontSize:"13.5px", fontWeight:700, color:"#059669", lineHeight:1.5 }}>{info}</span>
+                </div>
+                {mode === "forgot" && resetToken && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("reset")}
+                    style={{
+                      marginTop: "4px",
+                      padding: "8px 14px",
+                      borderRadius: "9px",
+                      background: "#10b981",
+                      color: "#fff",
+                      fontFamily: FONT,
+                      fontSize: "13px",
+                      fontWeight: 800,
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: "0 2px 8px rgba(16,185,129,0.3)",
+                    }}
+                  >
+                    <span>Set New Password Now</span> <ArrowRight size={14} />
+                  </button>
+                )}
               </div>
             )}
 

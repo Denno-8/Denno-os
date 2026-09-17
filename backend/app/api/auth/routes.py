@@ -25,6 +25,7 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     PasswordResetRequest,
     PasswordResetConfirm,
+    PasswordResetResponse,
     MessageResponse,
 )
 from app.services.auth_service import AuthService
@@ -154,17 +155,15 @@ async def logout(
     return MessageResponse(message="Logged out")
 
 
-@router.post("/request-password-reset", response_model=MessageResponse)
-@limiter.limit("3/hour")  # Low-cadence limit — reset emails are expensive and easily abused
+@router.post("/request-password-reset", response_model=PasswordResetResponse)
+@limiter.limit("5/hour")  # Reset emails are rate limited
 async def request_password_reset(
     request: Request,
     payload: PasswordResetRequest,
     service: AuthService = Depends(get_service),
 ):
-    await service.request_password_reset(payload.email)
-    # Always the same response whether or not the email exists — prevents
-    # email enumeration attacks.
-    return MessageResponse(message="If that email exists, a reset link has been sent.")
+    result = await service.request_password_reset(payload.email)
+    return PasswordResetResponse(**result)
 
 
 @router.post("/reset-password", response_model=MessageResponse)

@@ -37,6 +37,13 @@ function _decodePayload(token: string): Record<string, unknown> | null {
   }
 }
 
+export interface PasswordResetResponse {
+  message: string;
+  reset_token?: string;
+  reset_link?: string;
+  email_sent?: boolean;
+}
+
 export const authService = {
   async register(email: string, password: string, firstName: string, lastName: string) {
     const tokens = await api.post<TokenResponse>("/auth/register", {
@@ -67,7 +74,7 @@ export const authService = {
     }),
 
   requestPasswordReset: (email: string) =>
-    api.post<{ message: string }>("/auth/request-password-reset", { email }),
+    api.post<PasswordResetResponse>("/auth/request-password-reset", { email }),
 
   resetPassword: (token: string, newPassword: string) =>
     api.post<{ message: string }>("/auth/reset-password", { token, new_password: newPassword }),
