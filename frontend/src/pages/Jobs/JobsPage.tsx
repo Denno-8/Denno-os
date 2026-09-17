@@ -171,19 +171,24 @@ export default function JobsPage() {
   };
 
   const formatPostedDate = (postedAt?: string | null): string => {
-    if (!postedAt) return "";
+    if (!postedAt) return "Recently";
     const d = new Date(postedAt);
+    if (isNaN(d.getTime())) return "Recently";
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHrs = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHrs / 24);
-    if (diffMins < 60) return diffMins <= 1 ? "Just now" : `${diffMins}m ago`;
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: diffDays > 365 ? "numeric" : undefined });
+    
+    const formattedExact = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    
+    if (diffMins < 60) return diffMins <= 1 ? `Just now · ${formattedExact}` : `${diffMins}m ago · ${formattedExact}`;
+    if (diffHrs < 24) return `${diffHrs}h ago · ${formattedExact}`;
+    if (diffDays === 1) return `Yesterday · ${formattedExact}`;
+    if (diffDays < 7) return `${diffDays}d ago · ${formattedExact}`;
+    return formattedExact;
   };
+
 
   // ── useMemo MUST be before early returns (Rules of Hooks) ────────────────
   const filteredJobs = useMemo(() => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { X, RefreshCw, ExternalLink, Globe, Search, Building2, MapPin, CheckCircle2, ShieldCheck, Zap } from "lucide-react";
+import { X, RefreshCw, ExternalLink, Globe, Search, Building2, MapPin, CheckCircle2, ShieldCheck, Zap, Calendar } from "lucide-react";
+
 import { fetchJobFeed, jobAnalysis, type JobListing } from "../services/jobFeed.service";
 import { jobsService } from "../services/jobs.service";
 import { useQueryClient } from "@tanstack/react-query";
@@ -206,10 +207,12 @@ export default function OpenedCareerModal({ isOpen, onClose }: OpenedCareerModal
                       </span>
                     )}
                     {job.posted_at && (
-                      <span className="text-[11px]">
-                        Posted: {new Date(job.posted_at).toLocaleDateString()}
+                      <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                        <Calendar size={12} />
+                        Posted: {new Date(job.posted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </span>
                     )}
+
                   </div>
                 </div>
 

@@ -90,10 +90,27 @@ def determine_mode(title: str, text: str, default_mode: str = "Remote") -> str:
         return "Hybrid"
     if "onsite" in combined or "on-site" in combined or "office" in combined:
         return "Onsite"
-    return default_mode
+def is_real_job_posting(title: str, description: str, source_url: str = "") -> bool:
+    """Strictly validates if a scraped item is a legitimate job posting and source before syncing."""
+    clean_title = (title or "").strip()
+    clean_desc = (description or "").strip()
+    
+    if len(clean_title) < 3 or clean_title.lower() in ["404", "not found", "error", "untitled", "test", "null", "undefined"]:
+        return False
+        
+    if source_url and not source_url.startswith(("http://", "https://")):
+        return False
+        
+    combined = (clean_title + " " + clean_desc).lower()
+    
+    # Must contain at least two real career/job keywords
+    job_keywords = ["job", "career", "position", "apply", "requirements", "responsibilities", "skills", "qualification", "experience", "hiring", "team", "engineer", "developer", "manager", "intern", "analyst", "role"]
+    match_count = sum(1 for kw in job_keywords if kw in combined)
+    return match_count >= 2
 
 
 class RealJobFetcher:
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.headers = {
@@ -159,8 +176,10 @@ class RealJobFetcher:
                     category = item.get("category", "")
                     salary_str = item.get("salary", "")
 
-                    if not title or not cname:
+                    if not title or not cname or not is_real_job_posting(title, description, job_url):
+                        skipped += 1
                         continue
+
 
                     if await self.is_job_exists(title, cname, job_url):
                         skipped += 1

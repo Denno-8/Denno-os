@@ -102,74 +102,103 @@ class JobService:
 
     async def fetch_external(self, url: str) -> dict:
         import httpx, re, json
+        from urllib.parse import urlparse
 
         clean_url = url.strip()
         url_lower = clean_url.lower()
+
+        # 1. Domain & URL format validation
+        if not clean_url.startswith(("http://", "https://")):
+            raise ValueError("Invalid URL: Must start with http:// or https://")
+
+        parsed = urlparse(clean_url)
+        if not parsed.netloc or "localhost" in parsed.netloc or "127.0.0.1" in parsed.netloc:
+            raise ValueError("Invalid job source: Cannot import from local or empty domains")
 
         title = ""
         company_name = ""
         description = ""
         extracted_skills = []
         requirements = []
+        posted_at_date = date.today()
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         try:
-            async with httpx.AsyncClient(timeout=4.0, follow_redirects=True, headers=headers) as client:
+            async with httpx.AsyncClient(timeout=6.0, follow_redirects=True, headers=headers) as client:
                 resp = await client.get(clean_url)
-                if resp.status_code == 200:
-                    html = resp.text
-                    
-                    json_ld_matches = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE)
-                    for match in json_ld_matches:
-                        try:
-                            data = json.loads(match)
-                            if isinstance(data, dict) and data.get("@type") == "JobPosting":
-                                title = data.get("title", "") or title
-                                hiring_org = data.get("hiringOrganization", {})
-                                if isinstance(hiring_org, dict):
-                                    company_name = hiring_org.get("name", "") or company_name
-                                description = data.get("description", "") or description
-                        except Exception:
-                            pass
+                if resp.status_code != 200:
+                    raise ValueError(f"Unverified job source: URL returned HTTP {resp.status_code} error status")
+                
+                html = resp.text
+                if not html or len(html) < 200:
+                    raise ValueError("Unverified job source: Page content is empty or unreadable")
 
-                    og_title = re.search(r'<meta[^>]*property=["\']og:title["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-                    if og_title and not title:
-                        title = og_title.group(1).strip()
+                # Reject known 404 / domain parked error indicators
+                html_lower = html.lower()
+                if any(err in html_lower for err in ["404 not found", "page not found", "domain for sale", "access denied", "site maintenance", "account suspended"]):
+                    raise ValueError("Unverified job source: URL points to an error or parked domain page")
 
-                    og_site = re.search(r'<meta[^>]*property=["\']og:site_name["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
-                    if og_site and not company_name:
-                        company_name = og_site.group(1).strip()
+                # Parse JSON-LD JobPosting metadata
+                json_ld_matches = re.findall(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE)
+                for match in json_ld_matches:
+                    try:
+                        data = json.loads(match)
+                        if isinstance(data, dict) and data.get("@type") == "JobPosting":
+                            title = data.get("title", "") or title
+                            hiring_org = data.get("hiringOrganization", {})
+                            if isinstance(hiring_org, dict):
+                                company_name = hiring_org.get("name", "") or company_name
+                            description = data.get("description", "") or description
 
-                    if not title:
-                        title_match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE)
-                        if title_match:
-                            raw_title = title_match.group(1).strip()
-                            parts = [p.strip() for p in raw_title.split("|") if p.strip()]
-                            if parts:
-                                title = parts[0]
-                                if len(parts) > 1 and not company_name:
-                                    company_name = parts[-1]
+                            raw_date = data.get("datePosted")
+                            if raw_date:
+                                try:
+                                    posted_at_date = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00")).date()
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
 
-                    if description:
-                        description = re.sub(r'<[^>]+>', ' ', description)
-                        description = re.sub(r'\s+', ' ', description).strip()
+                og_title = re.search(r'<meta[^>]*property=["\']og:title["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+                if og_title and not title:
+                    title = og_title.group(1).strip()
 
-                    # Scanning 50+ tech terms
-                    tech_keywords = [
-                        "Python", "FastAPI", "React", "TypeScript", "JavaScript", "PostgreSQL",
-                        "Docker", "Kubernetes", "AWS", "Redis", "System Design", "Node.js",
-                        "GraphQL", "Java", "Go", "C#", "Django", "Tailwind", "CI/CD", "Machine Learning",
-                        "Git", "REST API", "Microservices", "SQL", "MongoDB", "GCP", "Azure", "Terraform",
-                        "HTML", "CSS", "Linux", "Next.js", "Express", "Flask", "PyTest", "Jest", "Redux"
-                    ]
-                    for kw in tech_keywords:
-                        if re.search(r'\b' + re.escape(kw) + r'\b', html, re.IGNORECASE):
-                            extracted_skills.append(kw)
-                            requirements.append(f"3+ years experience with {kw}")
-        except Exception:
-            pass
+                og_site = re.search(r'<meta[^>]*property=["\']og:site_name["\'][^>]*content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+                if og_site and not company_name:
+                    company_name = og_site.group(1).strip()
+
+                if not title:
+                    title_match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE)
+                    if title_match:
+                        raw_title = title_match.group(1).strip()
+                        parts = [p.strip() for p in raw_title.split("|") if p.strip()]
+                        if parts:
+                            title = parts[0]
+                            if len(parts) > 1 and not company_name:
+                                company_name = parts[-1]
+
+                if description:
+                    description = re.sub(r'<[^>]+>', ' ', description)
+                    description = re.sub(r'\s+', ' ', description).strip()
+
+                # Extract tech skills
+                tech_keywords = [
+                    "Python", "FastAPI", "React", "TypeScript", "JavaScript", "PostgreSQL",
+                    "Docker", "Kubernetes", "AWS", "Redis", "System Design", "Node.js",
+                    "GraphQL", "Java", "Go", "C#", "Django", "Tailwind", "CI/CD", "Machine Learning",
+                    "Git", "REST API", "Microservices", "SQL", "MongoDB", "GCP", "Azure", "Terraform",
+                    "HTML", "CSS", "Linux", "Next.js", "Express", "Flask", "PyTest", "Jest", "Redux"
+                ]
+                for kw in tech_keywords:
+                    if re.search(r'\b' + re.escape(kw) + r'\b', html, re.IGNORECASE):
+                        extracted_skills.append(kw)
+                        requirements.append(f"3+ years experience with {kw}")
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"Failed to verify job source at {clean_url}: {str(exc)}")
 
         if not company_name:
             if "linkedin.com" in url_lower:
@@ -209,6 +238,7 @@ class JobService:
             "requirements": requirements[:5],
             "match_score": min(98, max(72, 60 + (len(extracted_skills) * 4))),
             "ats_score": min(95, max(70, 65 + (len(extracted_skills) * 3))),
+            "posted_at": posted_at_date,
             "deadline": job_deadline,
             "is_expired": False,
             "source_url": clean_url,
@@ -218,6 +248,7 @@ class JobService:
         }
 
         created = await self.repo.create(doc)
+
         return _serialize(created)
 
     async def get_salary_benchmarks(self) -> dict:
