@@ -131,6 +131,7 @@ export default function LoginPage() {
       else if (err.status === 401) setError("Incorrect email or password. Please try again.");
       else if (err.status === 409) setError("An account with this email already exists. Try signing in.");
       else if (err.status === 422) setError("Please check your inputs — some fields are invalid.");
+      else if (err.status === 429) setError("Rate limit reached (Too many attempts). Please wait 15 seconds and try again.");
       else if (err.status === 0) setError("Server cold start timeout. Please wait a moment and try again.");
       else setError(fallback);
     } else {

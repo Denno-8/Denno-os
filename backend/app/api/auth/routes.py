@@ -40,14 +40,14 @@ def get_service(db: AsyncSession = Depends(get_database)) -> AuthService:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/hour")  # Registrations are once-per-user; 5/hour stops bulk account creation
+@limiter.limit("30/hour")  # 30 registrations per hour
 async def register(
     request: Request,
     response: Response,
     payload: RegisterRequest,
     service: AuthService = Depends(get_service),
 ):
-    """Rate-limited to 10 registrations per minute per IP."""
+    """Rate-limited to 30 registrations per hour per IP."""
     client_ip = request.client.host if request.client else "unknown"
     tokens = await service.register(payload, client_ip=client_ip)
     set_refresh_cookie(response, tokens.refresh_token)
@@ -59,14 +59,14 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("3/minute")  # 3 attempts/min per key; brute-force module adds IP+email lockout
+@limiter.limit("30/minute")  # 30 login attempts/min per key; brute-force module handles IP+email lockout
 async def login(
     request: Request,
     response: Response,
     payload: LoginRequest,
     service: AuthService = Depends(get_service),
 ):
-    """Rate-limited to 5 attempts per minute per IP to block credential stuffing."""
+    """Rate-limited to 30 attempts per minute per IP."""
     client_ip = request.client.host if request.client else "unknown"
     tokens = await service.login(payload, client_ip=client_ip)
     set_refresh_cookie(response, tokens.refresh_token)
@@ -156,7 +156,7 @@ async def logout(
 
 
 @router.post("/request-password-reset", response_model=PasswordResetResponse)
-@limiter.limit("5/hour")  # Reset emails are rate limited
+@limiter.limit("30/hour")  # Reset emails are rate limited
 async def request_password_reset(
     request: Request,
     payload: PasswordResetRequest,
@@ -167,7 +167,7 @@ async def request_password_reset(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-@limiter.limit("3/hour")  # Confirm reset tokens are one-time-use; 3/hour prevents token bruteforce
+@limiter.limit("30/hour")  # Confirm reset tokens are one-time-use
 async def reset_password(
     request: Request,
     payload: PasswordResetConfirm,
@@ -190,7 +190,7 @@ async def update_profile(
 
 
 @router.post("/change-password", response_model=MessageResponse)
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def change_password(
     request: Request,
     payload: ChangePasswordRequest,

@@ -31,7 +31,9 @@ export class ApiError extends Error {
         : (body as any)?.detail || (body as any)?.message;
     const detailMsg =
       extractedDetail ||
-      (status === 0
+      (status === 429
+        ? "Rate limit reached (Too many requests). Please wait a moment and try again."
+        : status === 0
         ? `Cannot reach backend at ${API_URL}. The server may be starting up — please wait a moment and try again.`
         : `API error ${status}`);
     super(detailMsg);
