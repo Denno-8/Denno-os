@@ -490,6 +490,17 @@ class EmailService:
         sent_status = False
         smtp_error_msg = None
 
+        sender_email = (
+            settings.smtp_user
+            if (settings.smtp_user and ("gmail" in settings.smtp_user or settings.smtp_from_email in ("", "noreply@denno.app")))
+            else (settings.smtp_from_email or settings.smtp_user or "candidate@denno.app")
+        )
+        sender_name = applicant_name or settings.smtp_from_name or "Job Candidate"
+
+        # ── 5. Robust Multi-Port IPv4 SMTP & IMAP Dispatch ──
+        sent_status = False
+        smtp_error_msg = None
+
         rec_domain = recruiter_email.split("@")[-1].strip() if (recruiter_email and "@" in str(recruiter_email)) else ""
         has_smtp_creds = bool(settings.smtp_user and settings.smtp_password)
 
@@ -511,13 +522,16 @@ class EmailService:
                         pass
 
                 msg = MIMEMultipart("mixed")
-                domain = "mail.gmail.com" if "gmail" in settings.smtp_from_email else (settings.smtp_from_email.split("@")[-1] if "@" in settings.smtp_from_email else "gmail.com")
+                domain = "smtp.gmail.com" if "gmail" in sender_email else (sender_email.split("@")[-1] if "@" in sender_email else "gmail.com")
                 msg["Message-ID"] = f"<{uuid.uuid4()}@{domain}>"
                 msg["Date"] = formatdate(localtime=True)
                 msg["MIME-Version"] = "1.0"
-                msg["From"] = f"{applicant_name or settings.smtp_from_name} <{settings.smtp_from_email}>"
+                msg["From"] = f"{sender_name} <{sender_email}>"
                 msg["To"] = target_rec_email
-                msg["Reply-To"] = f"{applicant_name} <{applicant_email or settings.smtp_from_email}>"
+                if applicant_email and "@" in applicant_email and applicant_email != target_rec_email:
+                    msg["Reply-To"] = f"{sender_name} <{applicant_email}>"
+                else:
+                    msg["Reply-To"] = f"{sender_name} <{sender_email}>"
                 msg["Subject"] = subject
 
                 alt_part = MIMEMultipart("alternative")
@@ -540,66 +554,61 @@ class EmailService:
                     att_cv.add_header("Content-Disposition", "attachment", filename=f"Resume_{clean_applicant_filename}.pdf")
                     msg.attach(att_cv)
 
-                if applicant_email and applicant_email != target_rec_email:
-                    msg["Bcc"] = applicant_email
-
                 recipients = [target_rec_email]
-                if applicant_email and applicant_email not in recipients:
+                if applicant_email and applicant_email not in recipients and "@" in applicant_email and "example.com" not in applicant_email and "testcorp.com" not in applicant_email:
                     recipients.append(applicant_email)
-                if settings.smtp_from_email and settings.smtp_from_email not in recipients:
-                    recipients.append(settings.smtp_from_email)
 
                 smtp_pass = settings.smtp_password.replace(" ", "") if settings.smtp_password else ""
 
-                # Multi-Strategy Fast Dispatch (IPv4 TLS 587 -> IPv4 SSL 465 -> Standard 587 -> Standard 465)
+                # Multi-Strategy Fast Dispatch (ordered based on SSL preference)
                 send_success = False
                 errors = []
 
-                # 1. Try IPv4 TLS 587 (5s timeout)
-                try:
-                    with IPv4SMTP(settings.smtp_host, settings.smtp_port, timeout=5) as server:
-                        server.starttls()
-                        server.login(settings.smtp_user, smtp_pass)
-                        server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
-                        send_success = True
-                except Exception as err1:
-                    errors.append(err1)
+                is_ssl_preferred = settings.smtp_use_ssl or settings.smtp_port == 465
+                strategies = [
+                    ("IPv4_SSL", 465),
+                    ("IPv4_TLS", 587),
+                    ("STD_SSL", 465),
+                    ("STD_TLS", 587),
+                ] if is_ssl_preferred else [
+                    ("IPv4_TLS", settings.smtp_port or 587),
+                    ("IPv4_SSL", 465),
+                    ("STD_TLS", settings.smtp_port or 587),
+                    ("STD_SSL", 465),
+                ]
 
-                # 2. Try IPv4 SSL 465 fallback (5s timeout)
-                if not send_success:
+                smtp_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
+
+                for mode, port in strategies:
+                    if send_success:
+                        break
                     try:
-                        smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
-                        with IPv4SMTP_SSL(smtp_ssl_host, 465, timeout=5) as server_ssl:
-                            server_ssl.login(settings.smtp_user, smtp_pass)
-                            server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
-                            send_success = True
-                    except Exception as err2:
-                        errors.append(err2)
-
-                # 3. Try Standard TLS 587 fallback (5s timeout)
-                if not send_success:
-                    try:
-                        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=5) as server:
-                            server.starttls()
-                            server.login(settings.smtp_user, smtp_pass)
-                            server.sendmail(settings.smtp_from_email, recipients, msg.as_string())
-                            send_success = True
-                    except Exception as err3:
-                        errors.append(err3)
-
-                # 4. Try Standard SSL 465 fallback (5s timeout)
-                if not send_success:
-                    try:
-                        smtp_ssl_host = "smtp.gmail.com" if "gmail" in settings.smtp_user else settings.smtp_host
-                        with smtplib.SMTP_SSL(smtp_ssl_host, 465, timeout=5) as server_ssl:
-                            server_ssl.login(settings.smtp_user, smtp_pass)
-                            server_ssl.sendmail(settings.smtp_from_email, recipients, msg.as_string())
-                            send_success = True
-                    except Exception as err4:
-                        errors.append(err4)
+                        if mode == "IPv4_TLS":
+                            with IPv4SMTP(smtp_host, port, timeout=6) as server:
+                                server.starttls()
+                                server.login(settings.smtp_user, smtp_pass)
+                                server.sendmail(sender_email, recipients, msg.as_string())
+                                send_success = True
+                        elif mode == "IPv4_SSL":
+                            with IPv4SMTP_SSL(smtp_host, port, timeout=6) as server_ssl:
+                                server_ssl.login(settings.smtp_user, smtp_pass)
+                                server_ssl.sendmail(sender_email, recipients, msg.as_string())
+                                send_success = True
+                        elif mode == "STD_TLS":
+                            with smtplib.SMTP(smtp_host, port, timeout=6) as server:
+                                server.starttls()
+                                server.login(settings.smtp_user, smtp_pass)
+                                server.sendmail(sender_email, recipients, msg.as_string())
+                                send_success = True
+                        elif mode == "STD_SSL":
+                            with smtplib.SMTP_SSL(smtp_host, port, timeout=6) as server_ssl:
+                                server_ssl.login(settings.smtp_user, smtp_pass)
+                                server_ssl.sendmail(sender_email, recipients, msg.as_string())
+                                send_success = True
+                    except Exception as err:
+                        errors.append(err)
 
                 if not send_success:
-                    # Select best error to present to user
                     auth_err = next((e for e in errors if isinstance(e, smtplib.SMTPAuthenticationError) or "535" in str(e) or "authentication" in str(e).lower()), None)
                     if auth_err:
                         raise Exception("Gmail SMTP Authentication failed: Please verify your SMTP_USER and ensure you are using a 16-character Gmail App Password (myaccount.google.com/apppasswords).")
@@ -949,3 +958,51 @@ class EmailService:
             "dispatched_ids": dispatched,
             "errors": errors
         }
+
+    async def send_daily_digest_email(self, user_email: str, user_name: str, top_jobs: List[dict]) -> dict:
+        """Sends a rich HTML daily job digest email to user with top matched fresh postings."""
+        if not top_jobs:
+            return {"sent": False, "reason": "No jobs to include"}
+
+        subject = f"🎯 Daily Job Digest: {len(top_jobs)} Fresh Tech Roles Posted Today"
+        
+        job_cards_html = ""
+        for j in top_jobs[:5]:
+            title = j.get("title", "Software Engineer")
+            company = j.get("company_name", "Tech Company")
+            salary = f"{j.get('currency', 'KES')} {j.get('salary_min', 0):,} - {j.get('salary_max', 0):,}"
+            match = j.get("match_score", 85)
+            url = j.get("source_url") or "#"
+            job_cards_html += f"""
+            <div style="border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin-bottom:12px; background-color:#ffffff;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; color:#0f172a; font-size:16px;">{title}</h3>
+                    <span style="background-color:#dbeafe; color:#1e40af; font-weight:bold; font-size:12px; padding:4px 8px; border-radius:12px;">{match}% Match</span>
+                </div>
+                <p style="margin:4px 0 8px 0; color:#64748b; font-size:14px;"><strong>{company}</strong> &bull; {salary}</p>
+                <a href="{url}" style="display:inline-block; background-color:#2563eb; color:#ffffff; text-decoration:none; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold;">View & Apply &rarr;</a>
+            </div>
+            """
+
+        body_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #334155;">
+            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #e2e8f0;">
+                <h2 style="color: #0f172a; margin-top: 0;">Hello {user_name or 'Career Accelerator'},</h2>
+                <p style="font-size: 15px; color: #475569;">Here are your top daily matched positions ingested across Kenyan and international tech hubs today:</p>
+                {job_cards_html}
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+                <p style="font-size: 12px; color: #94a3b8; text-align: center;">Denno Intelligence Career Engine &bull; Automatic Daily Dispatch</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        success, smtp_err = send_email_via_smtp(
+            to_email=user_email,
+            subject=subject,
+            body=f"Hello {user_name}, check your top daily matched jobs on Denno.",
+            html_body=body_html
+        )
+        return {"sent": success, "error": smtp_err}
+

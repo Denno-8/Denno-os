@@ -1,3 +1,4 @@
+from typing import List, Dict, Any, Optional
 from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -299,4 +300,41 @@ class JobService:
             "hiring_velocity": hiring_vel,
             "recent_roles": [j.title for j in jobs[:5]],
         }
+
+    @staticmethod
+    def compute_category_match_score(
+        user_skills: List[str],
+        user_category: Optional[str],
+        job_title: str,
+        required_skills: List[str]
+    ) -> int:
+        """Computes a category-tuned match score (0-100%) based on skill alignment and role domain."""
+        user_skills_lower = {s.lower() for s in (user_skills or [])}
+        req_skills_lower = {s.lower() for s in (required_skills or [])}
+        title_lower = (job_title or "").lower()
+
+        overlap = user_skills_lower.intersection(req_skills_lower)
+        skill_score = (len(overlap) / max(1, len(req_skills_lower))) * 70 if req_skills_lower else 45
+
+        category_bonus = 0
+        cat = (user_category or "").lower()
+        if "frontend" in cat and any(kw in title_lower for kw in ["frontend", "react", "vue", "angular", "ui", "fullstack"]):
+            category_bonus = 25
+        elif "backend" in cat and any(kw in title_lower for kw in ["backend", "python", "node", "java", "api", "django", "fastapi", "fullstack"]):
+            category_bonus = 25
+        elif "devops" in cat or "cloud" in cat:
+            if any(kw in title_lower for kw in ["devops", "cloud", "aws", "kubernetes", "sre", "infrastructure"]):
+                category_bonus = 25
+        elif "data" in cat or "ai" in cat or "ml" in cat:
+            if any(kw in title_lower for kw in ["data", "machine learning", "ai", "analytics", "python"]):
+                category_bonus = 25
+        elif "mobile" in cat:
+            if any(kw in title_lower for kw in ["android", "ios", "react native", "flutter", "mobile"]):
+                category_bonus = 25
+        elif cat:
+            category_bonus = 15
+
+        base_score = min(98, round(skill_score + category_bonus))
+        return max(50, base_score)
+
 

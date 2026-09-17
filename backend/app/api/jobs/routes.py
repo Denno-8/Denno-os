@@ -77,10 +77,10 @@ async def sync_live_daily_jobs(
     _user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_database),
 ):
-    """Fetch active daily software engineering and tech jobs from live APIs (Jobicy, RemoteOK, Arbeitnow)."""
-    from app.services.real_job_aggregator import RealJobAggregatorService
-    aggregator = RealJobAggregatorService(db)
-    result = await aggregator.sync_all_live_jobs()
+    """Fetch active daily software engineering and tech jobs from live APIs (Remotive, Arbeitnow, CampusBizz, OpenedCareer, Greenhouse, Ashby, etc.)."""
+    from app.services.real_job_fetcher import RealJobFetcher
+    fetcher = RealJobFetcher(db)
+    result = await fetcher.fetch_and_sync_all()
     await _invalidate_list_cache()
     return result
 
@@ -318,5 +318,37 @@ async def get_jobs_telemetry_status(
         "global_remote_portals": ["Remotive", "Arbeitnow", "Jobspresso", "RemoteOK"],
         "last_auto_synced_at": datetime.now().isoformat()
     }
+
+
+@router.post("/send-daily-digest")
+async def send_daily_job_digest(
+    user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_database)
+):
+    """Triggers an on-demand daily job digest alert (in-app + email) with fresh daily matched postings."""
+    from app.services.job_service import JobService
+    from app.services.notification_service import NotificationService
+    from app.models.sqlalchemy_models import User
+    from sqlalchemy import select
+
+    user_res = await db.execute(select(User).where(User.id == int(user_id)))
+    user = user_res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    job_service = JobService(db)
+    top_jobs = await job_service.list(q=None, mode=None, level=None, skip=0, limit=10, date_filter="today", sort="newest")
+    if not top_jobs:
+        top_jobs = await job_service.list(q=None, mode=None, level=None, skip=0, limit=10, date_filter="all", sort="newest")
+
+    notif_service = NotificationService(db)
+    result = await notif_service.send_daily_digest_alert(
+        user_id=int(user_id),
+        user_email=user.email,
+        user_name=getattr(user, "full_name", user.email),
+        top_jobs=top_jobs
+    )
+    return {"status": "success", "result": result}
+
 
 

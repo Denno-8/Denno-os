@@ -66,14 +66,38 @@ async def _daily_job_fetch_loop():
             if async_session_factory:
                 async with async_session_factory() as session:
                     from app.services.real_job_fetcher import RealJobFetcher
+                    from app.services.job_service import JobService
+                    from app.services.notification_service import NotificationService
+                    from app.models.sqlalchemy_models import User
+                    from sqlalchemy import select
+
                     fetcher = RealJobFetcher(session)
                     result = await fetcher.fetch_and_sync_all()
                     logger.info("Daily background job fetch completed: %s", result)
+
+                    # Trigger daily job digest alerts for active users
+                    job_svc = JobService(session)
+                    today_jobs = await job_svc.list(q=None, mode=None, level=None, skip=0, limit=10, date_filter="today", sort="newest")
+                    if today_jobs:
+                        users_res = await session.execute(select(User).limit(50))
+                        users = users_res.scalars().all()
+                        notif_svc = NotificationService(session)
+                        for u in users:
+                            try:
+                                await notif_svc.send_daily_digest_alert(
+                                    user_id=u.id,
+                                    user_email=u.email,
+                                    user_name=getattr(u, "full_name", u.email),
+                                    top_jobs=today_jobs
+                                )
+                            except Exception:
+                                pass
         except Exception as exc:
             logger.error("Daily background job fetch encountered error: %s", exc)
 
         # Sleep for 24 hours (86,400 seconds)
         await asyncio.sleep(86400)
+
 
 
 @asynccontextmanager

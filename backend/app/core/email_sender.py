@@ -35,9 +35,16 @@ async def _send(
     try:
         import aiosmtplib  # type: ignore
 
+        sender_email = (
+            settings.smtp_user
+            if (settings.smtp_user and ("gmail" in settings.smtp_user or settings.smtp_from_email in ("", "noreply@denno.app")))
+            else (settings.smtp_from_email or settings.smtp_user or "noreply@denno.app")
+        )
+        sender_name = settings.smtp_from_name or "Denno Career OS"
+
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+        msg["From"] = f"{sender_name} <{sender_email}>"
         msg["To"] = to_email
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
         msg.attach(MIMEText(html_body, "html", "utf-8"))
@@ -47,9 +54,10 @@ async def _send(
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user,
-            password=settings.smtp_password,
+            password=settings.smtp_password.replace(" ", "") if settings.smtp_password else "",
             use_tls=settings.smtp_use_ssl,
             start_tls=settings.smtp_tls and not settings.smtp_use_ssl,
+            sender=sender_email,
         )
         logger.info("[EmailSender] Email sent to %s | subject=%s", to_email, subject)
     except ImportError:

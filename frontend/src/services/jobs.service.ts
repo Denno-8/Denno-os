@@ -3,12 +3,14 @@ import type { Job, SalaryBenchmarksResponse, CompanyIntelligence } from "../type
 import type { Application } from "../types/application.types";
 
 export const jobsService = {
-  list: (params: { q?: string; mode?: string; level?: string; includeExpired?: boolean } = {}) => {
+  list: (params: { q?: string; mode?: string; level?: string; includeExpired?: boolean; date_filter?: string; sort?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set("q", params.q);
     if (params.mode && params.mode !== "All") qs.set("mode", params.mode);
     if (params.level && params.level !== "All") qs.set("level", params.level);
     if (params.includeExpired) qs.set("include_expired", "true");
+    if (params.date_filter && params.date_filter !== "all") qs.set("date_filter", params.date_filter);
+    if (params.sort) qs.set("sort", params.sort);
     const suffix = qs.toString() ? `?${qs}` : "";
     return api.get<Job[]>(`/jobs${suffix}`);
   },

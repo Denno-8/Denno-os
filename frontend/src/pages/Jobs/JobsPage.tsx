@@ -34,6 +34,7 @@ export default function JobsPage() {
   const [showHot, setShowHot] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [sortBy, setSortBy] = useState<"default" | "latest">("default");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
   const [autoSyncDone, setAutoSyncDone] = useState(false);
   const [autoSyncing, setAutoSyncing] = useState(false);
   const hasMounted = useRef(false);
@@ -51,7 +52,14 @@ export default function JobsPage() {
   const [generatingCvJobId, setGeneratingCvJobId] = useState<string | null>(null);
   const [companyIntelTarget, setCompanyIntelTarget] = useState<string | null>(null);
 
-  const { data: jobs, isLoading, isError, refetch } = useJobs({ q, mode, level, includeExpired });
+  const { data: jobs, isLoading, isError, refetch } = useJobs({
+    q,
+    mode,
+    level,
+    includeExpired,
+    date_filter: dateFilter,
+    sort: sortBy === "latest" ? "newest" : "match",
+  });
   const { data: applications = [] } = useApplications();
   const { data: salaryBenchmarks } = useQuery({
     queryKey: ["jobs", "salaryBenchmarks"],
@@ -429,6 +437,52 @@ export default function JobsPage() {
             <Filter size={11} /> Quick Filter:
           </div>
 
+          {/* Daily (Today) filter pill */}
+          <button
+            onClick={() => {
+              if (dateFilter === "today") {
+                setDateFilter("all");
+              } else {
+                setDateFilter("today");
+                setSortBy("latest");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border transition-all ${
+              dateFilter === "today"
+                ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 dark:shadow-indigo-900/40"
+                : isLight
+                  ? "bg-white text-slate-700 border-slate-200 hover:border-indigo-400 hover:text-indigo-600"
+                  : "bg-slate-800 text-slate-300 border-slate-700 hover:border-indigo-500 hover:text-indigo-400"
+            }`}
+            title="Show jobs posted today"
+          >
+            <CalendarDays size={11} />
+            Daily (Today)
+          </button>
+
+          {/* This Week filter pill */}
+          <button
+            onClick={() => {
+              if (dateFilter === "week") {
+                setDateFilter("all");
+              } else {
+                setDateFilter("week");
+                setSortBy("latest");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border transition-all ${
+              dateFilter === "week"
+                ? "bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-200 dark:shadow-sky-900/40"
+                : isLight
+                  ? "bg-white text-slate-700 border-slate-200 hover:border-sky-400 hover:text-sky-600"
+                  : "bg-slate-800 text-slate-300 border-slate-700 hover:border-sky-500 hover:text-sky-400"
+            }`}
+            title="Show jobs posted within the last 7 days"
+          >
+            <Clock size={11} />
+            This Week
+          </button>
+
           {/* Latest / Default sort toggle */}
           <button
             onClick={() => setSortBy(sortBy === "latest" ? "default" : "latest")}
@@ -505,10 +559,10 @@ export default function JobsPage() {
           </button>
 
           {/* Clear all filters */}
-          {(showHot || showNew || sortBy !== "default" || hideNoListing || includeExpired || minScore > 0 || mode !== "All" || level !== "All" || q) && (
+          {(showHot || showNew || sortBy !== "default" || dateFilter !== "all" || hideNoListing || includeExpired || minScore > 0 || mode !== "All" || level !== "All" || q) && (
             <button
               onClick={() => {
-                setShowHot(false); setShowNew(false); setSortBy("default");
+                setShowHot(false); setShowNew(false); setSortBy("default"); setDateFilter("all");
                 setHideNoListing(false); setIncludeExpired(false);
                 setMinScore(0); setMode("All"); setLevel("All"); setQ("");
               }}

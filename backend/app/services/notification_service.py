@@ -1,3 +1,4 @@
+from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.notification_repository import NotificationRepository
 from app.schemas.notification import NotificationCreate
@@ -41,7 +42,7 @@ class NotificationService:
 
         return serialized
 
-    async def list(self, user_id: int, limit: int = 50) -> list[dict]:
+    async def list(self, user_id: int, limit: int = 50) -> List[dict]:
         items = await self.repo.list_for_user(user_id, limit)
         return [_serialize(item) for item in items]
 
@@ -53,3 +54,29 @@ class NotificationService:
 
     async def unread_count(self, user_id: int) -> int:
         return await self.repo.unread_count(user_id)
+
+    async def send_daily_digest_alert(self, user_id: int, user_email: str, user_name: str, top_jobs: List[dict]) -> dict:
+
+        if not top_jobs:
+            return {"sent": False, "reason": "No jobs to digest"}
+
+        title = f"🎯 Daily Digest: {len(top_jobs)} New Matching Jobs"
+        message = f"Fresh postings ingested today! Top match: {top_jobs[0].get('title')} at {top_jobs[0].get('company_name')} ({top_jobs[0].get('match_score')}% Match)."
+        notif_payload = NotificationCreate(
+            title=title,
+            message=message,
+            type="job_alert",
+            link="/jobs?date_filter=today"
+        )
+        await self.create(user_id, notif_payload)
+
+        from app.services.email_service import EmailService
+        email_svc = EmailService(self.repo.session)
+        email_res = await email_svc.send_daily_digest_email(
+            user_email=user_email,
+            user_name=user_name,
+            top_jobs=top_jobs
+        )
+
+        return {"in_app": True, "email_dispatch": email_res}
+
