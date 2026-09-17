@@ -312,6 +312,13 @@ class AuthService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
         await self.repo.update_password(user_id, hash_password(new_password))
+        logger.info("Password reset successfully confirmed for user_id=%s, email=%s", user_id, user.email)
+
+        # Clear any brute-force lockout counters so the user can immediately log in with their new password
+        try:
+            await bf.record_success("0.0.0.0", user.email)
+        except Exception:
+            pass
 
     async def update_profile(self, user_id: int, payload: dict) -> UserOut:
         if "email" in payload and payload["email"]:

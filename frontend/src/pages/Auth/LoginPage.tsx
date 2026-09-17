@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSEO } from "../../hooks/useSEO";
 import {
@@ -116,11 +116,24 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
     setTimeout(() => setMounted(true), 60);
     // Pre-warm Render free-tier backend on page load via polling loop
     wakeBackend(90000).then((ok) => setServerStatus(ok ? "ready" : "unknown"));
-  }, []);
+
+    const urlToken = searchParams.get("token");
+    const isResetSuccess = searchParams.get("reset") === "success";
+
+    if (urlToken) {
+      setResetToken(urlToken);
+      setMode("reset");
+      setInfo("Reset token detected! Enter your new password below.");
+    } else if (isResetSuccess) {
+      setInfo("Password updated successfully! Please sign in with your new password.");
+    }
+  }, [searchParams]);
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setInfo(null); };
 

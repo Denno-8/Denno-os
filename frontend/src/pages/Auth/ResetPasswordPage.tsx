@@ -105,7 +105,7 @@ export default function ResetPasswordPage() {
     try {
       await authService.resetPassword(token, newPassword);
       setSuccess(true);
-      setTimeout(() => navigate("/login"), 3000);
+      setTimeout(() => navigate("/login?reset=success"), 2500);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         const d = (err.body as any)?.detail;
