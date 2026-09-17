@@ -44,3 +44,36 @@ async def test_access_token_creation_and_decoding():
     assert payload is not None
     assert payload.get("sub") == "42"
     assert payload.get("role") == "user"
+
+
+@pytest.mark.asyncio
+async def test_password_reset_flow(mock_db):
+    from app.core.security import create_reset_token
+
+    service = AuthService(mock_db)
+    mock_user = MagicMock()
+    mock_user.id = 123
+    mock_user.email = "reset@example.com"
+    mock_user.first_name = "Jane"
+
+    with patch.object(service.repo, "get_by_email", new_callable=AsyncMock) as mock_get_by_email, \
+         patch.object(service.repo, "get_by_id", new_callable=AsyncMock) as mock_get_by_id, \
+         patch.object(service.repo, "update_password", new_callable=AsyncMock) as mock_update_pw, \
+         patch("app.core.email_sender.send_password_reset", new_callable=AsyncMock) as mock_email:
+
+        mock_get_by_email.return_value = mock_user
+        mock_get_by_id.return_value = mock_user
+
+        # 1. Request reset
+        await service.request_password_reset("reset@example.com")
+        assert mock_email.called
+        token_sent = mock_email.call_args[0][1]
+        assert token_sent is not None
+
+        # 2. Confirm reset
+        await service.confirm_password_reset(token_sent, "NewStrongPass1!")
+        assert mock_update_pw.called
+        updated_id, new_hash = mock_update_pw.call_args[0]
+        assert updated_id == 123
+        assert verify_password("NewStrongPass1!", new_hash)
+

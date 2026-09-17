@@ -90,8 +90,8 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def create_reset_token(user_id: str) -> str:
-    """Short-lived (15 min) token for the password-reset flow."""
-    return _create_token(user_id, timedelta(minutes=15), "reset")
+    """60-minute token for the password-reset flow (matches email copy)."""
+    return _create_token(user_id, timedelta(minutes=60), "reset")
 
 
 async def revoke_token(payload_or_token: dict | str) -> None:

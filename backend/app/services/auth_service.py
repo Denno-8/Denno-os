@@ -257,14 +257,13 @@ class AuthService:
     async def request_password_reset(self, email: str) -> None:
         user = await self.repo.get_by_email(email)
         if not user:
+            # Always return silently — prevents email enumeration
             return
         token = create_reset_token(str(user.id))
         logger.info("Password reset token issued for user_id=%s", user.id)
-        # Send the reset link via email (no-op if SMTP is not configured)
         try:
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
-            reset_link = f"{__import__('app.core.config', fromlist=['settings']).settings.frontend_origin}/reset-password?token={token}"
             await send_password_reset(user.email, token, first_name)
             logger.info("Password reset email dispatched for user_id=%s", user.id)
         except Exception as exc:

@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { KeyRound, Lock, ArrowRight, CheckCircle2, AlertTriangle, Shield } from "lucide-react";
+import { KeyRound, Lock, ArrowRight, CheckCircle2, AlertTriangle, Shield, Eye, EyeOff } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useSEO } from "../../hooks/useSEO";
 import { authService } from "../../services/auth.service";
 import { ApiError } from "../../services/api";
 
 const FONT = "'Plus Jakarta Sans', Inter, ui-sans-serif, system-serif";
+
+const PASSWORD_RULES = [
+  { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+  { label: "One uppercase letter (A-Z)", test: (p: string) => /[A-Z]/.test(p) },
+  { label: "One digit (0-9)", test: (p: string) => /[0-9]/.test(p) },
+  { label: "One special character (!@#$...)", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
 
 function PasswordStrength({ password }: { password: string }) {
   const score = (() => {
@@ -21,8 +28,8 @@ function PasswordStrength({ password }: { password: string }) {
   const colors = ["", "#ef4444", "#f59e0b", "#3b82f6", "#10b981"];
   if (!password) return null;
   return (
-    <div style={{ marginTop: "6px" }}>
-      <div style={{ display: "flex", gap: "4px", marginBottom: "3px" }}>
+    <div style={{ marginTop: "8px" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
@@ -37,6 +44,14 @@ function PasswordStrength({ password }: { password: string }) {
         ))}
       </div>
       <span style={{ fontSize: "11px", fontWeight: 700, color: colors[score] }}>{labels[score]}</span>
+      <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "3px" }}>
+        {PASSWORD_RULES.map((rule) => (
+          <div key={rule.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", fontWeight: 600, color: rule.test(password) ? "#10b981" : "#94a3b8" }}>
+            <span style={{ fontSize: "10px" }}>{rule.test(password) ? "✓" : "○"}</span>
+            {rule.label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -57,32 +72,32 @@ export default function ResetPasswordPage() {
   const [token, setToken] = useState(urlToken);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (urlToken) {
-      setToken(urlToken);
-    }
+    if (urlToken) setToken(urlToken);
   }, [urlToken]);
+
+  const allRulesMet = PASSWORD_RULES.every((r) => r.test(newPassword));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!token.trim()) {
-      setError("Reset token is missing. Please use the link sent to your email.");
+      setError("Reset token is missing. Please use the link sent to your email, or paste the token manually.");
       return;
     }
-
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    if (!allRulesMet) {
+      setError("Password does not meet requirements. Please check all rules above.");
       return;
     }
-
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Passwords do not match. Please re-enter your new password.");
       return;
     }
 
@@ -90,13 +105,17 @@ export default function ResetPasswordPage() {
     try {
       await authService.resetPassword(token, newPassword);
       setSuccess(true);
-      setTimeout(() => {
-        navigate("/login");
-      }, 3000);
+      setTimeout(() => navigate("/login"), 3000);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         const d = (err.body as any)?.detail;
-        setError(typeof d === "string" ? d : "Failed to reset password. Token may be invalid or expired.");
+        if (err.status === 422) {
+          setError("Password does not meet security requirements: must be 8–128 chars with uppercase, digit, and special character.");
+        } else if (err.status === 400) {
+          setError("Reset link is invalid or expired. Please request a new password reset link from the login page.");
+        } else {
+          setError(typeof d === "string" ? d : "Failed to reset password. The link may have expired — please request a new one.");
+        }
       } else {
         setError("An unexpected error occurred. Please try again.");
       }
@@ -104,6 +123,7 @@ export default function ResetPasswordPage() {
       setLoading(false);
     }
   };
+
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -288,12 +308,20 @@ export default function ResetPasswordPage() {
                   }}
                 />
                 <input
-                  type="password"
+                  type={showPw ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  style={inputStyle}
+                  placeholder="e.g. MyPass1!"
+                  style={{ ...inputStyle, paddingRight: "40px" }}
                 />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPw(!showPw)}
+                  style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: dark ? "#94a3b8" : "#475569", display: "flex" }}
+                >
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
               <PasswordStrength password={newPassword} />
             </div>
@@ -322,18 +350,26 @@ export default function ResetPasswordPage() {
                   }}
                 />
                 <input
-                  type="password"
+                  type={showConfirmPw ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat new password"
-                  style={inputStyle}
+                  style={{ ...inputStyle, paddingRight: "40px" }}
                 />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowConfirmPw(!showConfirmPw)}
+                  style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: dark ? "#94a3b8" : "#475569", display: "flex" }}
+                >
+                  {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={loading || !newPassword || !confirmPassword}
+              disabled={loading || !allRulesMet || !confirmPassword}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -344,7 +380,7 @@ export default function ResetPasswordPage() {
                 fontSize: "14.5px",
                 fontWeight: 700,
                 cursor: loading ? "wait" : "pointer",
-                opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1,
+                opacity: loading || !allRulesMet || !confirmPassword ? 0.6 : 1,
                 boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
                 display: "flex",
                 alignItems: "center",
