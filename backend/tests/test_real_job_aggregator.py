@@ -218,6 +218,34 @@ async def test_public_service_kenya_fetch():
         assert jobs[0]["title"] == "ICT Officer II (Software Systems & Network Security)"
         assert "Public Service" in jobs[0]["company_name"] or "ICT Authority" in jobs[0]["company_name"]
         assert jobs[0]["currency"] == "KES"
+@pytest.mark.asyncio
+async def test_openedcareer_tech_fetch():
+    rss_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+      <channel>
+        <item>
+          <title>Senior ICT Systems Officer at Safaricom PLC</title>
+          <link>https://openedcareer.com/job/senior-ict-systems-officer-at-safaricom-plc/</link>
+          <description>Python FastAPI Linux PostgreSQL Cloud Microservices</description>
+          <content:encoded><![CDATA[<p>Full job details for Senior ICT Systems Officer at Safaricom PLC.</p>]]></content:encoded>
+          <pubDate>Wed, 19 Aug 2026 14:00:00 GMT</pubDate>
+        </item>
+      </channel>
+    </rss>"""
 
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = rss_content
 
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.get.return_value = mock_response
 
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        mock_session = AsyncMock()
+        service = RealJobAggregatorService(mock_session)
+        jobs = await service.fetch_from_openedcareer_tech(limit=5)
+        assert len(jobs) >= 1
+        assert jobs[0]["title"] == "Senior ICT Systems Officer"
+        assert jobs[0]["company_name"] == "Safaricom PLC"
+        assert jobs[0]["currency"] == "KES"

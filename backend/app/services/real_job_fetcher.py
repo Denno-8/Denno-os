@@ -96,7 +96,11 @@ def determine_mode(title: str, text: str, default_mode: str = "Remote") -> str:
 class RealJobFetcher:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DennoBot/1.0"}
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
 
     async def _get_or_create_company(self, company_name: str, career_url: str = "") -> Company:
         """Find existing company by name or create a new entry."""
@@ -396,48 +400,49 @@ class RealJobFetcher:
 
     async def fetch_jobs_opened_kenya(self) -> Dict[str, Any]:
         """
-        Fetch real live jobs from Jobs Opened Kenya & verified Kenyan job portals.
-        Covers top Kenyan tech, engineering, cybersecurity, and corporate job openings.
+        Fetch real live jobs from OpenedCareer Kenya (openedcareer.com), Jobs Opened Kenya,
+        and verified Kenyan public & private sector portals.
         """
         added = 0
         skipped = 0
-        kenya_source_name = "Jobs Opened Kenya Portal"
-        jobs_opened_url = "https://www.jobsopened.com/kenya"
+        kenya_source_name = "OpenedCareer Kenya & Public Sector Portal"
+        jobs_opened_url = "https://openedcareer.com/"
 
-        # Dedicated company entry for Jobs Opened Kenya Aggregator
-        comp = await self._get_or_create_company("Jobs Opened Kenya Network", jobs_opened_url)
+        # Dedicated company entry for OpenedCareer Kenya Aggregator
+        comp = await self._get_or_create_company("OpenedCareer Kenya Network", jobs_opened_url)
 
-        # 1. Attempt live HTTP scrape from Jobs Opened Kenya
+        # 1. Attempt live HTTP scrape from OpenedCareer.com & Jobs Opened Kenya
         scraped_roles = []
         try:
-            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers=self.headers) as client:
-                resp = await client.get("https://www.jobsopened.com/kenya")
-                if resp.status_code == 200:
-                    html_content = resp.text
-                    title_matches = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>([^<]*(?:Engineer|Developer|Analyst|Security|Manager|Specialist|Officer)[^<]*)</a>', html_content, re.IGNORECASE)
-                    for link, title in title_matches[:10]:
-                        clean_title = title.strip()
-                        if len(clean_title) > 5 and len(clean_title) < 100:
-                            scraped_roles.append({
-                                "title": clean_title,
-                                "company": "Kenyan Tech Enterprise",
-                                "mode": "Hybrid",
-                                "level": determine_level(clean_title),
-                                "type": "Full-time",
-                                "sal_min": 180000,
-                                "sal_max": 320000,
-                                "skills": extract_skills_from_text(clean_title),
-                                "desc": f"Live job opening for {clean_title} sourced from Jobs Opened Kenya portal.",
-                                "url": link if link.startswith("http") else f"https://www.jobsopened.com{link}",
-                                "reqs": [
-                                    "Relevant degree or professional experience in Software Development, Information Systems, or related discipline",
-                                    "Proven competency in software development lifecycle, testing, and system maintenance",
-                                    "Demonstrated technical skills in database management, backend APIs, or web technologies",
-                                    "Strong analytical thinking, attention to detail, and problem-solving skills"
-                                ]
-                            })
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=self.headers) as client:
+                for live_url in ["https://openedcareer.com/feed/", "https://openedcareer.com/"]:
+                    resp = await client.get(live_url)
+                    if resp.status_code == 200:
+                        html_content = resp.text
+                        title_matches = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>([^<]*(?:Engineer|Developer|Analyst|Security|Manager|Specialist|Officer|Assistant|Consultant|Intern)[^<]*)</a>', html_content, re.IGNORECASE)
+                        for link, title in title_matches[:15]:
+                            clean_title = title.strip()
+                            if len(clean_title) > 5 and len(clean_title) < 100:
+                                scraped_roles.append({
+                                    "title": clean_title,
+                                    "company": "Kenyan Enterprise / Public Sector",
+                                    "mode": "Hybrid",
+                                    "level": determine_level(clean_title),
+                                    "type": "Full-time",
+                                    "sal_min": 180000,
+                                    "sal_max": 320000,
+                                    "skills": extract_skills_from_text(clean_title),
+                                    "desc": f"Live job opening for {clean_title} sourced from openedcareer.com portal.",
+                                    "url": link if link.startswith("http") else f"https://openedcareer.com{link}",
+                                    "reqs": [
+                                        "Relevant degree or professional experience in Software Development, Information Systems, or related discipline",
+                                        "Proven competency in software development lifecycle, testing, and system maintenance",
+                                        "Demonstrated technical skills in database management, backend APIs, or web technologies",
+                                        "Strong analytical thinking, attention to detail, and problem-solving skills"
+                                    ]
+                                })
         except Exception as exc:
-            logger.warning("Jobs Opened Kenya live HTTP scrape attempt completed with fallback: %s", exc)
+            logger.warning("OpenedCareer Kenya live HTTP scrape attempt completed with fallback: %s", exc)
 
         # 2. Comprehensive verified Kenyan job openings dataset
         kenya_curated_roles = [
