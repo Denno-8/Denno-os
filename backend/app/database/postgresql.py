@@ -91,144 +91,150 @@ async def init_db():
 
     if not is_sqlite:
         try:
+            pg_statements = [
+                """ALTER TABLE IF EXISTS job_sources
+                   ADD COLUMN IF NOT EXISTS company_id integer,
+                   ADD COLUMN IF NOT EXISTS scrape_method character varying(100) DEFAULT 'manual',
+                   ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'recent',
+                   ADD COLUMN IF NOT EXISTS jobs_found integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS last_checked_at timestamp with time zone DEFAULT now(),
+                   ADD COLUMN IF NOT EXISTS description text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true""",
+
+                """ALTER TABLE IF EXISTS cv_versions
+                   ADD COLUMN IF NOT EXISTS name character varying(255) NOT NULL DEFAULT 'Untitled CV',
+                   ADD COLUMN IF NOT EXISTS focus character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS ats_score integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS skills text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS file_url character varying(500),
+                   ADD COLUMN IF NOT EXISTS times_used integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS last_used_at timestamp with time zone,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now(),
+                   ADD COLUMN IF NOT EXISTS parsed_content text,
+                   ADD COLUMN IF NOT EXISTS parsed_sections jsonb""",
+
+                """ALTER TABLE IF EXISTS goals
+                   ADD COLUMN IF NOT EXISTS label character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Applications',
+                   ADD COLUMN IF NOT EXISTS current integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS target integer DEFAULT 1,
+                   ADD COLUMN IF NOT EXISTS deadline date,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS notes
+                   ADD COLUMN IF NOT EXISTS body text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Notes',
+                   ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}'""",
+
+                """ALTER TABLE IF EXISTS recruiters
+                   ADD COLUMN IF NOT EXISTS company_name character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS email character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS linkedin character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS notes text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS relationship_strength character varying(50) DEFAULT 'Warm',
+                   ADD COLUMN IF NOT EXISTS last_contacted_at timestamp with time zone,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS emails
+                   ADD COLUMN IF NOT EXISTS from_name character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS subject character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Application Received',
+                   ADD COLUMN IF NOT EXISTS body text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS received_at timestamp with time zone DEFAULT now(),
+                   ADD COLUMN IF NOT EXISTS read boolean DEFAULT false,
+                   ADD COLUMN IF NOT EXISTS recommended_action text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS application_id integer,
+                   ADD COLUMN IF NOT EXISTS source character varying(100) DEFAULT 'manual',
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS interviews
+                   ADD COLUMN IF NOT EXISTS application_id integer,
+                   ADD COLUMN IF NOT EXISTS type character varying(50) DEFAULT 'Technical',
+                   ADD COLUMN IF NOT EXISTS scheduled_at timestamp with time zone DEFAULT now(),
+                   ADD COLUMN IF NOT EXISTS location character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS behavioral_questions text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS technical_questions text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'scheduled',
+                   ADD COLUMN IF NOT EXISTS prep_checklist jsonb DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS post_interview_notes text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS outcome character varying(50),
+                   ADD COLUMN IF NOT EXISTS questions_asked jsonb DEFAULT '[]',
+                   ADD COLUMN IF NOT EXISTS what_went_well text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS what_to_improve text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS overall_confidence integer,
+                   ADD COLUMN IF NOT EXISTS follow_up_actions text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS post_mortem_done boolean DEFAULT false,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS calendar_events
+                   ADD COLUMN IF NOT EXISTS title character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS type character varying(50) DEFAULT 'Task',
+                   ADD COLUMN IF NOT EXISTS date date DEFAULT CURRENT_DATE,
+                   ADD COLUMN IF NOT EXISTS time character varying(50) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS color character varying(50) DEFAULT 'blue',
+                   ADD COLUMN IF NOT EXISTS application_id integer,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS user_course_progress
+                   ADD COLUMN IF NOT EXISTS lessons_completed integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'not_started',
+                   ADD COLUMN IF NOT EXISTS progress_percent integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS certificate_url character varying(500) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
+
+                """ALTER TABLE IF EXISTS learning_courses
+                   ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS level character varying(50) DEFAULT 'Beginner',
+                   ADD COLUMN IF NOT EXISTS duration_minutes integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS lesson_count integer DEFAULT 1,
+                   ADD COLUMN IF NOT EXISTS url character varying(500) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS linked_skill character varying(255) DEFAULT ''""",
+
+                """ALTER TABLE IF EXISTS users
+                   ADD COLUMN IF NOT EXISTS first_name character varying(100) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS last_name character varying(100) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS phone character varying(20) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS title character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS years_experience integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS linkedin character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS github character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS website character varying(255) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS summary text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS career_goal text DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS availability character varying(100) DEFAULT 'Immediately',
+                   ADD COLUMN IF NOT EXISTS notice_period character varying(100) DEFAULT '1 month',
+                   ADD COLUMN IF NOT EXISTS salary_min integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS salary_max integer DEFAULT 0,
+                   ADD COLUMN IF NOT EXISTS currency character varying(10) DEFAULT 'KES',
+                   ADD COLUMN IF NOT EXISTS open_to text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS skills text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS certifications text[] DEFAULT '{}',
+                   ADD COLUMN IF NOT EXISTS theme character varying(20) DEFAULT 'light',
+                   ADD COLUMN IF NOT EXISTS two_fa_enabled boolean DEFAULT false,
+                   ADD COLUMN IF NOT EXISTS profile_public boolean DEFAULT false,
+                   ADD COLUMN IF NOT EXISTS education jsonb DEFAULT '[]',
+                   ADD COLUMN IF NOT EXISTS experience_list jsonb DEFAULT '[]',
+                   ADD COLUMN IF NOT EXISTS projects jsonb DEFAULT '[]',
+                   ADD COLUMN IF NOT EXISTS notifications jsonb DEFAULT '{"jobs":true,"deadlines":true,"interviews":true,"emails":true,"learning":true,"weekly_report":true}',
+                   ADD COLUMN IF NOT EXISTS role character varying(20) DEFAULT 'user',
+                   ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true""",
+
+                """ALTER TABLE IF EXISTS jobs
+                   ADD COLUMN IF NOT EXISTS is_expired boolean DEFAULT false,
+                   ADD COLUMN IF NOT EXISTS requirements text[] DEFAULT '{}'""",
+
+                """ALTER TABLE IF EXISTS applications
+                   ADD COLUMN IF NOT EXISTS cv_snapshot jsonb,
+                   ADD COLUMN IF NOT EXISTS app_letter_snapshot jsonb,
+                   ADD COLUMN IF NOT EXISTS apply_method character varying(50) DEFAULT 'website'"""
+            ]
+
             async with engine.begin() as conn:
-                await conn.exec_driver_sql("""
-                    ALTER TABLE IF EXISTS job_sources
-                    ADD COLUMN IF NOT EXISTS company_id integer,
-                    ADD COLUMN IF NOT EXISTS scrape_method character varying(100) DEFAULT 'manual',
-                    ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'recent',
-                    ADD COLUMN IF NOT EXISTS jobs_found integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS last_checked_at timestamp with time zone DEFAULT now(),
-                    ADD COLUMN IF NOT EXISTS description text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
-
-                    ALTER TABLE IF EXISTS cv_versions
-                    ADD COLUMN IF NOT EXISTS name character varying(255) NOT NULL DEFAULT 'Untitled CV',
-                    ADD COLUMN IF NOT EXISTS focus character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS ats_score integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS skills text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS file_url character varying(500),
-                    ADD COLUMN IF NOT EXISTS times_used integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS last_used_at timestamp with time zone,
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now(),
-                    ADD COLUMN IF NOT EXISTS parsed_content text,
-                    ADD COLUMN IF NOT EXISTS parsed_sections jsonb;
-
-                    ALTER TABLE IF EXISTS goals
-                    ADD COLUMN IF NOT EXISTS label character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Applications',
-                    ADD COLUMN IF NOT EXISTS current integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS target integer DEFAULT 1,
-                    ADD COLUMN IF NOT EXISTS deadline date,
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS notes
-                    ADD COLUMN IF NOT EXISTS body text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Notes',
-                    ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
-
-                    ALTER TABLE IF EXISTS recruiters
-                    ADD COLUMN IF NOT EXISTS company_name character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS email character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS linkedin character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS notes text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS relationship_strength character varying(50) DEFAULT 'Warm',
-                    ADD COLUMN IF NOT EXISTS last_contacted_at timestamp with time zone,
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS emails
-                    ADD COLUMN IF NOT EXISTS from_name character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS subject character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT 'Application Received',
-                    ADD COLUMN IF NOT EXISTS body text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS received_at timestamp with time zone DEFAULT now(),
-                    ADD COLUMN IF NOT EXISTS read boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS recommended_action text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS application_id integer,
-                    ADD COLUMN IF NOT EXISTS source character varying(100) DEFAULT 'manual',
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS interviews
-                    ADD COLUMN IF NOT EXISTS application_id integer,
-                    ADD COLUMN IF NOT EXISTS type character varying(50) DEFAULT 'Technical',
-                    ADD COLUMN IF NOT EXISTS scheduled_at timestamp with time zone DEFAULT now(),
-                    ADD COLUMN IF NOT EXISTS location character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS behavioral_questions text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS technical_questions text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'scheduled',
-                    ADD COLUMN IF NOT EXISTS prep_checklist jsonb DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS post_interview_notes text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS outcome character varying(50),
-                    ADD COLUMN IF NOT EXISTS questions_asked jsonb DEFAULT '[]',
-                    ADD COLUMN IF NOT EXISTS what_went_well text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS what_to_improve text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS overall_confidence integer,
-                    ADD COLUMN IF NOT EXISTS follow_up_actions text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS post_mortem_done boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS calendar_events
-                    ADD COLUMN IF NOT EXISTS title character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS type character varying(50) DEFAULT 'Task',
-                    ADD COLUMN IF NOT EXISTS date date DEFAULT CURRENT_DATE,
-                    ADD COLUMN IF NOT EXISTS time character varying(50) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS color character varying(50) DEFAULT 'blue',
-                    ADD COLUMN IF NOT EXISTS application_id integer,
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS user_course_progress
-                    ADD COLUMN IF NOT EXISTS lessons_completed integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS status character varying(50) DEFAULT 'not_started',
-                    ADD COLUMN IF NOT EXISTS progress_percent integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS certificate_url character varying(500) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
-
-                    ALTER TABLE IF EXISTS learning_courses
-                    ADD COLUMN IF NOT EXISTS category character varying(100) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS level character varying(50) DEFAULT 'Beginner',
-                    ADD COLUMN IF NOT EXISTS duration_minutes integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS lesson_count integer DEFAULT 1,
-                    ADD COLUMN IF NOT EXISTS url character varying(500) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS linked_skill character varying(255) DEFAULT '';
-
-                    ALTER TABLE IF EXISTS users
-                    ADD COLUMN IF NOT EXISTS first_name character varying(100) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS last_name character varying(100) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS phone character varying(20) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS title character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS years_experience integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS linkedin character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS github character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS website character varying(255) DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS summary text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS career_goal text DEFAULT '',
-                    ADD COLUMN IF NOT EXISTS availability character varying(100) DEFAULT 'Immediately',
-                    ADD COLUMN IF NOT EXISTS notice_period character varying(100) DEFAULT '1 month',
-                    ADD COLUMN IF NOT EXISTS salary_min integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS salary_max integer DEFAULT 0,
-                    ADD COLUMN IF NOT EXISTS currency character varying(10) DEFAULT 'KES',
-                    ADD COLUMN IF NOT EXISTS open_to text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS skills text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS certifications text[] DEFAULT '{}',
-                    ADD COLUMN IF NOT EXISTS theme character varying(20) DEFAULT 'light',
-                    ADD COLUMN IF NOT EXISTS two_fa_enabled boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS profile_public boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS education jsonb DEFAULT '[]',
-                    ADD COLUMN IF NOT EXISTS experience_list jsonb DEFAULT '[]',
-                    ADD COLUMN IF NOT EXISTS projects jsonb DEFAULT '[]',
-                    ADD COLUMN IF NOT EXISTS notifications jsonb DEFAULT '{"jobs":true,"deadlines":true,"interviews":true,"emails":true,"learning":true,"weekly_report":true}',
-                    ADD COLUMN IF NOT EXISTS role character varying(20) DEFAULT 'user',
-                    ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
-
-                    ALTER TABLE IF EXISTS jobs
-                    ADD COLUMN IF NOT EXISTS is_expired boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS requirements text[] DEFAULT '{}';
-
-                    ALTER TABLE IF EXISTS applications
-                    ADD COLUMN IF NOT EXISTS cv_snapshot jsonb,
-                    ADD COLUMN IF NOT EXISTS app_letter_snapshot jsonb,
-                    ADD COLUMN IF NOT EXISTS apply_method character varying(50) DEFAULT 'website';
-                """)
+                for stmt in pg_statements:
+                    try:
+                        await conn.exec_driver_sql(stmt)
+                    except Exception as s_err:
+                        print(f"PostgreSQL migration statement notice: {s_err}")
         except Exception as e:
             print(f"PG Migration notice: {e}")
     else:
