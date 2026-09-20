@@ -64,25 +64,13 @@ def _composite_key(request: Request) -> str:
 
 def _get_storage_uri() -> str:
     """
-    Returns settings.redis_url if Redis is reachable,
-    otherwise falls back to 'memory://' for local dev or when Redis is absent.
+    Returns the rate-limiter storage URI.
+    Always uses in-memory storage for reliability.
+    Redis is used separately for token revocation and brute-force tracking,
+    but the rate limiter doesn't need it — in-memory mode works well for
+    single-worker deployments (Render free tier).
     """
-    try:
-        from urllib.parse import urlparse
-        from app.core.config import settings as _s
-        url = getattr(_s, "redis_url", "")
-        if not url or "localhost" in url or "127.0.0.1" in url:
-            return "memory://"
-        parsed = urlparse(url)
-        host = parsed.hostname or "localhost"
-        port = parsed.port or 6379
-        import socket
-        # Use short timeout for connection check
-        with socket.create_connection((host, port), timeout=0.3):
-            return url
-    except Exception:
-        logger.info("Redis is unreachable — rate limiter falling back to in-memory storage")
-        return "memory://"
+    return "memory://"
 
 
 # Keyed by composite IP+user_id (or plain IP for anonymous requests).
