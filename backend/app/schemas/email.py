@@ -23,9 +23,10 @@ class EmailOut(BaseModel):
     subject: str
     category: str
     body: str
-    received_at: datetime
+    received_at: datetime | None = None
     read: bool
     recommended_action: str
     application_id: str | None = None
     source: str
     created_at: datetime
+    updated_at: datetime | None = None

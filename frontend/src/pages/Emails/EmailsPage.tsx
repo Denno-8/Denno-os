@@ -36,12 +36,13 @@ export default function EmailsPage() {
   const handleSyncInbox = async () => {
     setIsSyncing(true);
     try {
-      const result = await api.post<{ synced_count: number }>("/emails/sync-inbox", {});
+      const result = await api.post<{ synced: boolean; count: number; message: string }>("/emails/sync-inbox", {});
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["applications"] });
       queryClient.invalidateQueries({ queryKey: ["applications", "analytics"] });
-      setSyncMsg(`Synced ${result.synced_count} recruiter emails & updated stage tracker!`);
-      setTimeout(() => setSyncMsg(""), 4000);
+      const msg = result.message || `Synced ${result.count ?? 0} recruiter email${result.count !== 1 ? "s" : ""}`;
+      setSyncMsg(msg);
+      setTimeout(() => setSyncMsg(""), 5000);
     } catch (err) {
       setSyncMsg("Inbox sync check completed.");
       setTimeout(() => setSyncMsg(""), 3000);

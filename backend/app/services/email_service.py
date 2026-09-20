@@ -1010,11 +1010,15 @@ class EmailService:
         </html>
         """
 
-        success, smtp_err = send_email_via_smtp(
-            to_email=user_email,
-            subject=subject,
-            body=f"Hello {user_name}, check your top daily matched jobs on Denno.",
-            html_body=body_html
-        )
-        return {"sent": success, "error": smtp_err}
+        try:
+            from app.core.email_sender import _send as _async_send
+            await _async_send(
+                to_email=user_email,
+                subject=subject,
+                html_body=body_html,
+                text_body=f"Hello {user_name}, check your top {len(top_jobs)} daily matched jobs on Denno: {settings.frontend_origin}/jobs",
+            )
+            return {"sent": True, "error": None}
+        except Exception as exc:
+            return {"sent": False, "error": str(exc)}
 
