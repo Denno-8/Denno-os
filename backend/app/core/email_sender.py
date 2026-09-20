@@ -48,7 +48,7 @@ async def _send(
             req = urllib.request.Request(
                 "https://api.resend.com/emails",
                 data=json.dumps({
-                    "from": f"{sender_name} <{sender_email}>" if "@" in sender_email and "noreply" not in sender_email else "onboarding@resend.dev",
+                    "from": f"{sender_name} <onboarding@resend.dev>",
                     "to": [to_email],
                     "subject": subject,
                     "html": html_body,
