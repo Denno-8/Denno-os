@@ -44,14 +44,23 @@ async def _send(
     # ── HTTP API Provider Fallbacks (Port 443 HTTPS — works on Render free tier) ──
     if settings.resend_api_key:
         try:
-            import urllib.request, json
+            import urllib.request, json as _json
+            # Use the configured from-email or smtp_user as the Resend sender.
+            # IMPORTANT: onboarding@resend.dev only works with full (non-sending-only) Resend keys.
+            # For Sending-Only keys the sender MUST be a domain you've verified in the Resend dashboard.
+            # If you haven't verified a domain, set SMTP_FROM_EMAIL to your verified sender address.
+            resend_from_email = (
+                settings.smtp_from_email or settings.smtp_user or "noreply@denno.app"
+            ).strip()
+            resend_from_name = (settings.smtp_from_name or "Denno Career OS").strip()
             req = urllib.request.Request(
                 "https://api.resend.com/emails",
-                data=json.dumps({
-                    "from": f"{sender_name} <onboarding@resend.dev>",
+                data=_json.dumps({
+                    "from": f"{resend_from_name} <{resend_from_email}>",
                     "to": [to_email],
                     "subject": subject,
                     "html": html_body,
+                    "text": text_body,
                 }).encode("utf-8"),
                 headers={
                     "Authorization": f"Bearer {settings.resend_api_key.strip()}",
@@ -62,8 +71,20 @@ async def _send(
             )
             with urllib.request.urlopen(req, timeout=12) as resp:
                 if resp.status in (200, 201, 202):
-                    logger.info("[EmailSender] ✓ Email sent via Resend HTTP API to %s | subject=%s", to_email, subject)
+                    logger.info("[EmailSender] ✓ Email sent via Resend HTTP API to %s | subject=%s | from=%s", to_email, subject, resend_from_email)
                     return
+        except urllib.request.HTTPError as resend_http_err:
+            # Read the response body for detailed Resend error messages (e.g. domain not verified)
+            try:
+                err_body = resend_http_err.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = "<unreadable>"
+            logger.warning(
+                "[EmailSender] Resend HTTP API send failed (HTTP Error %s: %s). Body: %s. "
+                "Ensure SMTP_FROM_EMAIL is a domain verified in your Resend dashboard "
+                "(https://resend.com/domains). Falling back to SMTP...",
+                resend_http_err.code, resend_http_err.reason, err_body
+            )
         except Exception as resend_err:
             logger.warning("[EmailSender] Resend HTTP API send failed (%s). Falling back...", resend_err)
 

@@ -342,6 +342,9 @@ async def smtp_diagnostic():
     import ssl
     from app.core.config import settings
 
+    # Compute the actual Resend from-address (mirrors email_sender.py logic)
+    resend_from_email = (settings.smtp_from_email or settings.smtp_user or "noreply@denno.app").strip()
+
     config = {
         "emails_enabled": settings.emails_enabled,
         "smtp_host": settings.smtp_host,
@@ -353,7 +356,14 @@ async def smtp_diagnostic():
         "smtp_from_name": settings.smtp_from_name,
         "smtp_use_ssl": settings.smtp_use_ssl,
         "smtp_tls": settings.smtp_tls,
+        "smtp_effective_ssl": settings.smtp_port == 465,  # auto-detect: port 465 always uses SSL
         "resend_api_key_set": bool(settings.resend_api_key),
+        "resend_from_email": resend_from_email if settings.resend_api_key else None,
+        "resend_domain_warning": (
+            f"Ensure '{resend_from_email.split('@')[-1] if '@' in resend_from_email else resend_from_email}' "
+            "is verified in your Resend dashboard (https://resend.com/domains). "
+            "Unverified domains cause HTTP 403 errors."
+        ) if settings.resend_api_key else None,
         "brevo_api_key_set": bool(settings.brevo_api_key),
         "frontend_origin": settings.frontend_origin,
         "app_env": settings.app_env,
@@ -377,12 +387,15 @@ async def smtp_diagnostic():
             with urllib.request.urlopen(req, timeout=8) as resp:
                 if resp.status in (200, 201):
                     test_result["success"] = True
-                    test_result["working_mode"] = "Resend HTTP API (Port 443 HTTPS)"
+                    test_result["working_mode"] = "Resend HTTP API (Full Key)"
         except Exception as r_err:
-            # If api-keys returns 403 (sending-only key), check if key string format is valid
+            # 403 on /api-keys = Sending-Only key (can still send emails from verified domains)
             if "403" in str(r_err) or "Forbidden" in str(r_err):
                 test_result["success"] = True
-                test_result["working_mode"] = "Resend HTTP API (Sending-Only Key Active)"
+                test_result["working_mode"] = (
+                    f"Resend HTTP API (Sending-Only Key) — from: {resend_from_email}. "
+                    f"Domain must be verified at https://resend.com/domains"
+                )
             else:
                 test_result["error"] = f"Resend API check: {r_err}"
 

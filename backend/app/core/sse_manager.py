@@ -8,8 +8,8 @@ Architecture:
   - SSEManager subscribes to the user's Redis channel and forwards events.
   - On lost connection (client navigates away), the subscription is cleaned up.
 
-This module intentionally avoids asyncio.Queue so it is thread-safe when
-Celery workers publish from a separate process.
+Redis-optional: if Redis is unavailable, the stream continues in
+heartbeat-only mode — the client can still fetch notifications via REST.
 """
 import asyncio
 import json
@@ -32,54 +32,87 @@ async def event_stream(user_id: int) -> AsyncGenerator[str, None]:
     Yields:
         SSE lines such as::
 
-            data: {"type": "notification", "count": 3}\n\n
+            data: {"type": "notification", "count": 3}\\n\\n
 
         A "heartbeat" comment line is sent every 30 seconds to keep the
         connection alive through proxies that time out idle connections.
+
+    If Redis is unavailable, falls back to heartbeat-only mode so the
+    SSE connection remains open (client-side REST polling still works).
     """
-    from app.core.redis_client import get_redis
-
-    redis = get_redis()
-
     # Send an immediate "connected" event so the client knows the stream is live.
     yield f"data: {json.dumps({'type': 'connected', 'user_id': user_id})}\n\n"
 
     channel = _channel(user_id)
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(channel)
-    logger.debug("[SSE] User %s subscribed to channel %s", user_id, channel)
+    heartbeat_interval = 30   # seconds
+    poll_interval = 0.5       # seconds between pubsub polls
+
+    # Attempt to establish a Redis pub/sub connection.
+    # On failure, fall through to heartbeat-only mode.
+    pubsub = None
+    try:
+        from app.core.redis_client import get_redis
+        redis = get_redis()
+        pubsub = redis.pubsub()
+        await asyncio.wait_for(pubsub.subscribe(channel), timeout=3.0)
+        logger.debug("[SSE] User %s subscribed to channel %s", user_id, channel)
+    except Exception as redis_err:
+        logger.warning(
+            "[SSE] Redis unavailable for user %s (%s). "
+            "Falling back to heartbeat-only SSE. "
+            "Set REDIS_URL in Render env vars to re-enable real-time push.",
+            user_id, redis_err,
+        )
+        pubsub = None  # heartbeat-only mode
 
     try:
-        heartbeat_interval = 30  # seconds
-        elapsed = 0
-        poll_interval = 0.5  # seconds between pubsub polls
+        elapsed = 0.0
 
         while True:
-            # Check for a new message (non-blocking)
-            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=poll_interval)
-            if message and message.get("type") == "message":
-                raw = message.get("data", b"")
-                if isinstance(raw, bytes):
-                    raw = raw.decode("utf-8")
+            if pubsub is not None:
                 try:
-                    payload = json.loads(raw)
-                except (json.JSONDecodeError, TypeError):
-                    payload = {"type": "notification"}
-                yield f"data: {json.dumps(payload)}\n\n"
-                elapsed = 0  # reset heartbeat timer on real event
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=poll_interval
+                    )
+                    if message and message.get("type") == "message":
+                        raw = message.get("data", b"")
+                        if isinstance(raw, bytes):
+                            raw = raw.decode("utf-8")
+                        try:
+                            payload = json.loads(raw)
+                        except (json.JSONDecodeError, TypeError):
+                            payload = {"type": "notification"}
+                        yield f"data: {json.dumps(payload)}\n\n"
+                        elapsed = 0.0  # reset heartbeat timer on real event
+                        continue
+                except asyncio.CancelledError:
+                    raise
+                except Exception as poll_err:
+                    logger.warning(
+                        "[SSE] Redis poll error for user %s: %s — switching to heartbeat-only mode",
+                        user_id, poll_err,
+                    )
+                    pubsub = None  # stop trying Redis for this connection
+            else:
+                # No Redis — just sleep for the poll interval
+                await asyncio.sleep(poll_interval)
 
             elapsed += poll_interval
             if elapsed >= heartbeat_interval:
                 # Send a comment (: ) as keepalive — ignored by EventSource
                 yield ": heartbeat\n\n"
-                elapsed = 0
+                elapsed = 0.0
 
     except asyncio.CancelledError:
         logger.debug("[SSE] User %s stream cancelled (client disconnected)", user_id)
     finally:
-        await pubsub.unsubscribe(channel)
-        await pubsub.close()
-        logger.debug("[SSE] User %s unsubscribed from channel %s", user_id, channel)
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe(channel)
+                await pubsub.close()
+            except Exception:
+                pass
+        logger.debug("[SSE] User %s stream ended", user_id)
 
 
 async def publish_notification(user_id: int, payload: dict) -> None:
