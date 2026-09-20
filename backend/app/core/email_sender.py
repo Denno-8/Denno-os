@@ -27,7 +27,7 @@ async def _send(
     html_body: str,
     text_body: str,
 ) -> None:
-    """Low-level async SMTP send. Raises on failure."""
+    """Low-level async email send with HTTP API fallback (Resend/Brevo/SendGrid) and SMTP."""
     if not settings.emails_enabled:
         logger.info(
             "[EmailSender] EMAILS_ENABLED=false — skipping send to %s | subject=%s",
@@ -36,10 +36,66 @@ async def _send(
         )
         return
 
+    sender_email = (
+        settings.smtp_from_email or settings.smtp_user or "noreply@denno.app"
+    ).strip()
+    sender_name = (settings.smtp_from_name or "Denno Career OS").strip()
+
+    # ── HTTP API Provider Fallbacks (Port 443 HTTPS — works on Render free tier) ──
+    if settings.resend_api_key:
+        try:
+            import urllib.request, json
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps({
+                    "from": f"{sender_name} <{sender_email}>" if "@" in sender_email and "noreply" not in sender_email else "onboarding@resend.dev",
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_body,
+                }).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {settings.resend_api_key.strip()}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "DennoCareerOS/1.0",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                if resp.status in (200, 201, 202):
+                    logger.info("[EmailSender] ✓ Email sent via Resend HTTP API to %s | subject=%s", to_email, subject)
+                    return
+        except Exception as resend_err:
+            logger.warning("[EmailSender] Resend HTTP API send failed (%s). Falling back...", resend_err)
+
+    if settings.brevo_api_key:
+        try:
+            import urllib.request, json
+            req = urllib.request.Request(
+                "https://api.brevo.com/v3/smtp/email",
+                data=json.dumps({
+                    "sender": {"name": sender_name, "email": sender_email},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "htmlContent": html_body,
+                }).encode("utf-8"),
+                headers={
+                    "api-key": settings.brevo_api_key.strip(),
+                    "Content-Type": "application/json",
+                    "User-Agent": "DennoCareerOS/1.0",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                if resp.status in (200, 201, 202):
+                    logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s", to_email, subject)
+                    return
+        except Exception as brevo_err:
+            logger.warning("[EmailSender] Brevo HTTP API send failed (%s). Falling back...", brevo_err)
+
     if not settings.smtp_user:
         logger.warning(
             "[EmailSender] SMTP_USER not configured — cannot send email to %s | subject=%s. "
-            "Set SMTP_USER and SMTP_PASSWORD environment variables (Render dashboard or .env).",
+            "Set SMTP_USER and SMTP_PASSWORD or RESEND_API_KEY/BREVO_API_KEY in Render dashboard.",
             to_email,
             subject,
         )

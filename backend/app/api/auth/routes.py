@@ -353,6 +353,8 @@ async def smtp_diagnostic():
         "smtp_from_name": settings.smtp_from_name,
         "smtp_use_ssl": settings.smtp_use_ssl,
         "smtp_tls": settings.smtp_tls,
+        "resend_api_key_set": bool(settings.resend_api_key),
+        "brevo_api_key_set": bool(settings.brevo_api_key),
         "frontend_origin": settings.frontend_origin,
         "app_env": settings.app_env,
     }
@@ -360,10 +362,42 @@ async def smtp_diagnostic():
     port = settings.smtp_port
     use_ssl = port == 465
 
-    # Attempt real SMTP connection tests with IPv4 socket resolution
+    # Attempt real email connection tests (HTTP API or SMTP with IPv4 socket resolution)
     test_result = {"attempted": False, "success": False, "error": None, "error_type": None, "working_mode": None}
 
-    if settings.smtp_user and settings.smtp_password:
+    # 1. Test Resend HTTP API if configured
+    if settings.resend_api_key:
+        test_result["attempted"] = True
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.resend.com/domains",
+                headers={"Authorization": f"Bearer {settings.resend_api_key.strip()}"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status in (200, 201):
+                    test_result["success"] = True
+                    test_result["working_mode"] = "Resend HTTP API (Port 443 HTTPS)"
+        except Exception as r_err:
+            test_result["error"] = f"Resend API check: {r_err}"
+
+    # 2. Test Brevo HTTP API if configured
+    if not test_result["success"] and settings.brevo_api_key:
+        test_result["attempted"] = True
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "https://api.brevo.com/v3/account",
+                headers={"api-key": settings.brevo_api_key.strip()}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status in (200, 201):
+                    test_result["success"] = True
+                    test_result["working_mode"] = "Brevo HTTP API (Port 443 HTTPS)"
+        except Exception as b_err:
+            test_result["error"] = f"Brevo API check: {b_err}"
+
+    if not test_result["success"] and settings.smtp_user and settings.smtp_password:
         import socket
         smtp_password = settings.smtp_password.replace(" ", "")
         test_result["attempted"] = True

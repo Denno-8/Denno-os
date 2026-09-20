@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     # STARTTLS upgrade. Set to False only if SMTP_USE_SSL=True or testing with localhost:1025
     smtp_tls: bool = Field(default=True, alias="SMTP_TLS")
+    # HTTP Email Provider Keys (Bypasses Render outbound SMTP port blocking over HTTPS port 443)
+    resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
+    sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
 
     # CORS & Frontend
     frontend_origin: str = Field(default="http://localhost:5173", alias="FRONTEND_ORIGIN")
