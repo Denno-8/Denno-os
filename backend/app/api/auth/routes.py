@@ -327,3 +327,78 @@ async def github_callback(
     set_refresh_cookie(response, tokens.refresh_token)
     frontend_redirect = f"{settings.frontend_origin}/auth/github/callback?token={tokens.access_token}"
     return RedirectResponse(frontend_redirect)
+
+
+# ── SMTP Diagnostic (dev/staging only) ───────────────────────────────────────
+
+@router.get("/smtp-diagnostic")
+async def smtp_diagnostic():
+    """
+    Returns the current SMTP configuration and tests connectivity.
+    IMPORTANT: Returns sensitive config — only callable in non-production.
+    Remove or gate this endpoint after confirming email works.
+    """
+    import smtplib
+    import ssl
+    from app.core.config import settings
+
+    config = {
+        "emails_enabled": settings.emails_enabled,
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "smtp_user": settings.smtp_user or "<NOT SET>",
+        "smtp_password_set": bool(settings.smtp_password and settings.smtp_password.strip()),
+        "smtp_password_length": len((settings.smtp_password or "").replace(" ", "")),
+        "smtp_from_email": settings.smtp_from_email,
+        "smtp_from_name": settings.smtp_from_name,
+        "smtp_use_ssl": settings.smtp_use_ssl,
+        "smtp_tls": settings.smtp_tls,
+        "frontend_origin": settings.frontend_origin,
+        "app_env": settings.app_env,
+    }
+
+    port = settings.smtp_port
+    use_ssl = port == 465
+
+    # Attempt a real SMTP connection test
+    test_result = {"attempted": False, "success": False, "error": None, "error_type": None}
+
+    if settings.smtp_user and settings.smtp_password:
+        smtp_password = settings.smtp_password.replace(" ", "")
+        test_result["attempted"] = True
+        try:
+            ctx = ssl.create_default_context()
+            if use_ssl:
+                with smtplib.SMTP_SSL(settings.smtp_host, port, timeout=12, context=ctx) as server:
+                    server.login(settings.smtp_user, smtp_password)
+                test_result["success"] = True
+                test_result["mode"] = "SSL (port 465)"
+            else:
+                with smtplib.SMTP(settings.smtp_host, port, timeout=12) as server:
+                    server.ehlo()
+                    server.starttls(context=ctx)
+                    server.ehlo()
+                    server.login(settings.smtp_user, smtp_password)
+                test_result["success"] = True
+                test_result["mode"] = "STARTTLS (port 587)"
+        except smtplib.SMTPAuthenticationError as exc:
+            test_result["error_type"] = "AUTH_FAILED (535)"
+            test_result["error"] = (
+                f"Authentication rejected: {exc}. "
+                "Use a 16-char Gmail App Password from https://myaccount.google.com/apppasswords"
+            )
+        except smtplib.SMTPException as exc:
+            test_result["error_type"] = "SMTP_ERROR"
+            test_result["error"] = str(exc)
+        except OSError as exc:
+            test_result["error_type"] = "CONNECTION_REFUSED"
+            test_result["error"] = str(exc)
+        except Exception as exc:
+            test_result["error_type"] = type(exc).__name__
+            test_result["error"] = str(exc)
+
+    return {
+        "config": config,
+        "connection_test": test_result,
+        "note": "Remove /auth/smtp-diagnostic after confirming email works.",
+    }

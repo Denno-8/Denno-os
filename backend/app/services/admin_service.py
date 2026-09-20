@@ -356,8 +356,15 @@ class AdminService:
         return await self.get_email_settings()
 
     async def test_smtp_connection(self, target_email: str | None = None) -> dict:
+        """
+        Test SMTP connectivity with full diagnostic output.
+        Auto-detects SSL (port 465) vs STARTTLS (port 587).
+        Returns the full error detail so it can be shown in the admin UI.
+        """
         import smtplib
-        from email.mime.text import MIMEText
+        import ssl
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText as MIMEPlain
         from app.core.config import settings
 
         if not settings.smtp_host or not settings.smtp_port:
@@ -366,34 +373,106 @@ class AdminService:
                 detail="SMTP host and port must be configured before testing connection."
             )
 
-        recipient = target_email or settings.smtp_from_email or "admin@denno.app"
-        msg = MIMEText(
-            f"Hello,\n\nThis is an automated diagnostic ping sent from your Denno Career OS Admin Settings Email Setup.\n\n"
-            f"Configuration status: Successful TLS handshake & authentication test.\n"
-            f"Sender Name: {settings.smtp_from_name}\n"
-            f"Sender Email: {settings.smtp_from_email}\n",
-            "plain"
-        )
-        msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+        if not settings.smtp_user:
+            return {
+                "success": False,
+                "message": "SMTP_USER is not set. Add it in Render dashboard → Environment.",
+                "config": {"host": settings.smtp_host, "port": settings.smtp_port, "user": "<not set>"}
+            }
+
+        if not settings.smtp_password:
+            return {
+                "success": False,
+                "message": "SMTP_PASSWORD is not set. Add Gmail App Password in Render dashboard → Environment.",
+                "config": {"host": settings.smtp_host, "port": settings.smtp_port, "user": settings.smtp_user}
+            }
+
+        # For Gmail, From MUST match authenticated user
+        is_gmail = "gmail" in (settings.smtp_host or "").lower()
+        from_email = settings.smtp_user if is_gmail else (settings.smtp_from_email or settings.smtp_user)
+        from_name = settings.smtp_from_name or "Denno Career OS"
+        recipient = target_email or settings.smtp_user  # Default: send test to yourself
+
+        # Strip spaces from App Password (common copy-paste issue)
+        smtp_password = (settings.smtp_password or "").replace(" ", "")
+
+        # Auto-detect SSL from port
+        port = settings.smtp_port
+        use_ssl = port == 465
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "[Denno] SMTP Test — Connection Successful"
+        msg["From"] = f"{from_name} <{from_email}>"
         msg["To"] = recipient
-        msg["Subject"] = "[Denno Admin] System Email SMTP Test Connection"
+        body_text = (
+            f"This is an automated SMTP diagnostic test from Denno Career OS.\n\n"
+            f"Config: {from_email} via {settings.smtp_host}:{port} "
+            f"({'SSL' if use_ssl else 'STARTTLS'})\n\n"
+            f"If you receive this, password reset emails will work correctly."
+        )
+        msg.attach(MIMEPlain(body_text, "plain", "utf-8"))
 
         try:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=8) as server:
-                server.starttls()
-                if settings.smtp_user and settings.smtp_password:
-                    server.login(settings.smtp_user, settings.smtp_password)
-                if recipient:
-                    server.sendmail(settings.smtp_from_email or recipient, [recipient], msg.as_string())
+            ctx = ssl.create_default_context()
+            if use_ssl:
+                # Port 465 — direct SSL
+                with smtplib.SMTP_SSL(settings.smtp_host, port, timeout=15, context=ctx) as server:
+                    server.login(settings.smtp_user, smtp_password)
+                    server.sendmail(from_email, [recipient], msg.as_string())
+            else:
+                # Port 587 — STARTTLS
+                with smtplib.SMTP(settings.smtp_host, port, timeout=15) as server:
+                    server.ehlo()
+                    server.starttls(context=ctx)
+                    server.ehlo()
+                    server.login(settings.smtp_user, smtp_password)
+                    server.sendmail(from_email, [recipient], msg.as_string())
+
             return {
                 "success": True,
-                "message": f"SMTP handshake and test email successfully dispatched to {recipient}",
-                "recipient": recipient
+                "message": f"✓ Test email sent successfully to {recipient}. Check the inbox!",
+                "recipient": recipient,
+                "config": {
+                    "host": settings.smtp_host,
+                    "port": port,
+                    "mode": "SSL" if use_ssl else "STARTTLS",
+                    "user": settings.smtp_user,
+                    "from": from_email,
+                }
+            }
+        except smtplib.SMTPAuthenticationError as exc:
+            return {
+                "success": False,
+                "error_type": "AUTH_FAILED",
+                "message": (
+                    f"Gmail rejected the App Password. "
+                    f"Make sure you are using a 16-character App Password (not your login password). "
+                    f"Generate one at: https://myaccount.google.com/apppasswords — error: {exc}"
+                ),
+                "config": {"host": settings.smtp_host, "port": port, "user": settings.smtp_user}
+            }
+        except smtplib.SMTPException as exc:
+            return {
+                "success": False,
+                "error_type": "SMTP_ERROR",
+                "message": f"SMTP error: {exc}",
+                "config": {"host": settings.smtp_host, "port": port, "user": settings.smtp_user}
+            }
+        except OSError as exc:
+            return {
+                "success": False,
+                "error_type": "CONNECTION_ERROR",
+                "message": (
+                    f"Could not connect to {settings.smtp_host}:{port}. "
+                    f"Check SMTP_HOST and SMTP_PORT settings. Error: {exc}"
+                ),
+                "config": {"host": settings.smtp_host, "port": port, "user": settings.smtp_user}
             }
         except Exception as exc:
             return {
                 "success": False,
-                "message": f"SMTP Connection Failed: {str(exc)}",
-                "recipient": recipient
+                "error_type": "UNKNOWN",
+                "message": f"Unexpected error: {type(exc).__name__}: {exc}",
+                "config": {"host": settings.smtp_host, "port": port, "user": settings.smtp_user}
             }
 
