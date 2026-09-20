@@ -29,8 +29,8 @@ class UserRepository:
         self.session.add(user)
         logger.debug("Creating user email=%s", data["email"])
         await self.session.flush()
-        await self.session.commit()
-        logger.debug("Committed user id=%s", user.id)
+        # NOTE: do NOT commit here — get_session() commits after the route completes.
+        logger.debug("Flushed user id=%s", user.id)
         return user
 
     async def update_password(self, user_id: int, password_hash: str) -> None:
@@ -40,7 +40,6 @@ class UserRepository:
             user.password_hash = password_hash
             user.updated_at = datetime.now(timezone.utc)
             await self.session.flush()
-            await self.session.commit()
 
     async def update_role(self, user_id: int, role: str) -> None:
         """Update user's role (admin or user)."""
@@ -49,7 +48,6 @@ class UserRepository:
             user.role = role
             user.updated_at = datetime.now(timezone.utc)
             await self.session.flush()
-            await self.session.commit()
 
     async def update(self, user_id: int, data: dict) -> User | None:
         """Update user fields."""
@@ -60,7 +58,6 @@ class UserRepository:
                     setattr(user, key, value)
             user.updated_at = datetime.now(timezone.utc)
             await self.session.flush()
-            await self.session.commit()
         return user
 
     async def list(self, skip: int = 0, limit: int = 100) -> list[User]:

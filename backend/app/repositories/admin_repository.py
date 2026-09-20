@@ -47,7 +47,6 @@ class AdminRepository:
         user = User(**doc)
         self.session.add(user)
         await self.session.flush()
-        await self.session.commit()
         await self.session.refresh(user)
         return user
 
@@ -58,7 +57,6 @@ class AdminRepository:
                 if hasattr(user, key) and key not in ("id", "created_at"):
                     setattr(user, key, value)
             await self.session.flush()
-            await self.session.commit()
             await self.session.refresh(user)
         return user
 
@@ -66,7 +64,7 @@ class AdminRepository:
         user = await self.get_user(user_id)
         if user:
             await self.session.delete(user)
-            await self.session.commit()
+            await self.session.flush()
             return True
         return False
 
