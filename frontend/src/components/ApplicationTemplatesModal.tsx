@@ -115,7 +115,7 @@ Warmly,
   },
   {
     id: "status_checkin",
-    title: "Application Status Inky Check-in",
+    title: "Application Status Check-in",
     category: "Follow-up",
     icon: <FileQuestion className="w-4 h-4 text-indigo-500" />,
     description: "Polite follow-up note sent after 1-2 weeks of no response.",
