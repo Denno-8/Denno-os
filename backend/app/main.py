@@ -138,32 +138,8 @@ app = FastAPI(
     redoc_url=_redoc_url,
 )
 
-# ── GZip Compression (outermost wrapper — shrinks all JSON responses) ─────────
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# ── Bot Shield (outermost — runs first, assigns X-Request-ID) ────────────────
-# Conditional: disabled via BOT_SHIELD_ENABLED=false in test environments.
-if settings.bot_shield_enabled:
-    app.add_middleware(BotShieldMiddleware)
-
-# ── Security Headers (second — runs on all responses including errors) ────────
-app.add_middleware(SecurityHeadersMiddleware)
-
-# ── Trusted Hosts (blocks Host-header injection) ──────────────────────────────
-# In development this allows localhost; in production set ALLOWED_HOSTS in .env.
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
-
-# ── Rate Limiting ─────────────────────────────────────────────────────────────
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
-
-# ── Audit Logger ──────────────────────────────────────────────────────────────
-app.add_middleware(AuditLoggerMiddleware)
-
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Allow configured FRONTEND_ORIGIN, all Vercel preview/prod domains (*.vercel.app),
-# and local development origins.
+# Placed FIRST (outermost) so ALL responses (including 429, 403, 500, 502/503) get CORS headers attached.
 _extra_origins: list[str] = [
     "http://localhost:5173",
     "http://localhost:5174",
@@ -181,6 +157,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── GZip Compression ──────────────────────────────────────────────────────────
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ── Bot Shield (assigns X-Request-ID) ─────────────────────────────────────────
+if settings.bot_shield_enabled:
+    app.add_middleware(BotShieldMiddleware)
+
+# ── Security Headers ──────────────────────────────────────────────────────────
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ── Trusted Hosts ──────────────────────────────────────────────────────────────
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+
+# ── Rate Limiting & Custom Exception Handler (attaches CORS to 429 responses) ──
+def _cors_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    resp = _rate_limit_exceeded_handler(request, exc)
+    origin = request.headers.get("origin", "*")
+    resp.headers["Access-Control-Allow-Origin"] = origin
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    return resp
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _cors_rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# ── Audit Logger ──────────────────────────────────────────────────────────────
+app.add_middleware(AuditLoggerMiddleware)
 
 from app.api.metrics import router as metrics_router
 
@@ -200,7 +204,8 @@ async def root():
 
 
 @app.get("/health", tags=["System"])
-async def health():
+@limiter.exempt
+async def health(request: Request):
     return {"status": "ok"}
 
 
