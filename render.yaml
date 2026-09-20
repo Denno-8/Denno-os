@@ -41,9 +41,25 @@ services:
           name: denno-db
           property: connectionString
 
-      # ── Redis (Paste URL from existing Render Redis or Upstash)
+      # ── Redis
+      # Your previous Redis instance (red-dak3rbm743jc73fsf470) no longer exists.
+      # Fix options (pick ONE):
+      #
+      # OPTION A — New Render Redis (Free, internal URL, same region required):
+      #   1. Render Dashboard → New → Redis → Free plan → same region as backend
+      #   2. After creation, go to Redis service → copy "Internal Redis URL"
+      #      It looks like: redis://red-xxxxxxxxxxxxxxxxxxxx:6379
+      #   3. Paste it as REDIS_URL below or in the backend service env vars
+      #
+      # OPTION B — Upstash Redis (Free, works cross-region, TLS):
+      #   1. Sign up at https://upstash.com (free)
+      #   2. Create a Redis database → copy "UPSTASH_REDIS_URL" (rediss://...)
+      #   3. Paste it as REDIS_URL below
+      #
+      # NOTE: Redis is optional. Without it, token revocation, rate-limiting,
+      # and SSE notifications are gracefully disabled. Password reset still works.
       - key: REDIS_URL
-        sync: false
+        sync: false   # Paste your new Redis URL here in Render dashboard
 
       # ── Security
       - key: JWT_SECRET
