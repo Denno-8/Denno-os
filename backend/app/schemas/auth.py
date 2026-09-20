@@ -150,6 +150,8 @@ class PasswordResetResponse(BaseModel):
     reset_token: str | None = None
     reset_link: str | None = None
     email_sent: bool = False
+    smtp_warning: str | None = None   # dev-mode only: SMTP not configured hint
+    smtp_error: str | None = None     # dev-mode only: SMTP send failure detail
 
 
 class MessageResponse(BaseModel):

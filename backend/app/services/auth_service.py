@@ -154,6 +154,17 @@ class AuthService:
         }
         created = await self.repo.create(doc)
         user_id = str(created.id)
+
+        # Fire-and-forget welcome email — doesn't block or fail registration if SMTP is unconfigured
+        try:
+            import asyncio
+            from app.core.email_sender import send_welcome
+            asyncio.create_task(
+                send_welcome(user_email, payload.first_name or "")
+            )
+        except Exception as _welcome_err:
+            logger.debug("Welcome email skipped: %s", _welcome_err)
+
         return TokenResponse(
             access_token=create_access_token(user_id, role=role),
             refresh_token=create_refresh_token(user_id),
@@ -275,13 +286,25 @@ class AuthService:
         user = await self.repo.get_by_email(email)
         if not user:
             # Always return silently — prevents email enumeration
-            return {"message": "If that email exists, a reset link has been sent to your inbox.", "email_sent": False}
+            return {
+                "message": "If that email exists, a reset link has been sent to your inbox.",
+                "email_sent": False,
+            }
 
         token = create_reset_token(str(user.id))
         reset_link = f"{settings.frontend_origin}/reset-password?token={token}"
-        logger.info("Password reset token issued for user_id=%s: %s", user.id, reset_link)
+        logger.info("Password reset token issued for user_id=%s", user.id)
+
+        # Check if SMTP is properly configured before attempting send
+        smtp_configured = bool(
+            settings.emails_enabled
+            and settings.smtp_user
+            and settings.smtp_password
+            and settings.smtp_host
+        )
 
         email_sent = False
+        send_error: str | None = None
         try:
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
@@ -289,14 +312,34 @@ class AuthService:
             logger.info("Password reset email dispatched for user_id=%s", user.id)
             email_sent = True
         except Exception as exc:
-            logger.error("Failed to send password reset email for user_id=%s: %s", user.id, exc)
+            send_error = str(exc)
+            logger.error(
+                "Failed to send password reset email for user_id=%s | smtp_user=%s | error=%s",
+                user.id,
+                settings.smtp_user or "<not set>",
+                exc,
+            )
 
-        return {
+        response: dict = {
             "message": "If that email exists, a reset link has been sent to your inbox.",
-            "reset_token": token,
-            "reset_link": reset_link,
             "email_sent": email_sent,
         }
+
+        # In development (non-production), expose the token and link for easy testing.
+        # In production, never return the raw token in the API response — it must only
+        # arrive via email so the security model is not bypassed.
+        if settings.app_env != "production":
+            response["reset_token"] = token
+            response["reset_link"] = reset_link
+            if not smtp_configured:
+                response["smtp_warning"] = (
+                    "SMTP is not configured (SMTP_USER or SMTP_PASSWORD missing). "
+                    "Use the reset_link above to test the flow without email."
+                )
+            elif send_error:
+                response["smtp_error"] = send_error
+
+        return response
 
     async def confirm_password_reset(self, token: str, new_password: str) -> None:
         try:

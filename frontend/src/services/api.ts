@@ -155,7 +155,9 @@ async function request<T>(
       !_isRetry &&
       !path.includes("/auth/login") &&
       !path.includes("/auth/register") &&
-      !path.includes("/auth/refresh")
+      !path.includes("/auth/refresh") &&
+      !path.includes("/auth/request-password-reset") &&
+      !path.includes("/auth/reset-password")
     ) {
       const refreshed = await tryRefresh();
       if (refreshed) return request<T>(path, options, true);

@@ -42,6 +42,8 @@ export interface PasswordResetResponse {
   reset_token?: string;
   reset_link?: string;
   email_sent?: boolean;
+  smtp_warning?: string;  // dev-mode: SMTP not configured
+  smtp_error?: string;    // dev-mode: SMTP send error detail
 }
 
 export const authService = {

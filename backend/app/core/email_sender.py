@@ -7,6 +7,7 @@ Set ``EMAILS_ENABLED=false`` (or leave SMTP_USER blank) in .env
 to run locally without an SMTP server — every send will be
 logged as a no-op instead of raising an error.
 """
+import asyncio
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -16,6 +17,9 @@ from app.core.config import settings
 
 logger = logging.getLogger("denno.email")
 
+# SMTP connection timeout in seconds — prevents hanging forever on broken connections
+_SMTP_TIMEOUT = 30
+
 
 async def _send(
     to_email: str,
@@ -24,9 +28,27 @@ async def _send(
     text_body: str,
 ) -> None:
     """Low-level async SMTP send. Raises on failure."""
-    if not settings.emails_enabled or not settings.smtp_user:
+    if not settings.emails_enabled:
         logger.info(
-            "[EmailSender] SMTP disabled or unconfigured — skipping send to %s | subject=%s",
+            "[EmailSender] EMAILS_ENABLED=false — skipping send to %s | subject=%s",
+            to_email,
+            subject,
+        )
+        return
+
+    if not settings.smtp_user:
+        logger.warning(
+            "[EmailSender] SMTP_USER not configured — cannot send email to %s | subject=%s. "
+            "Set SMTP_USER and SMTP_PASSWORD environment variables (Render dashboard or .env).",
+            to_email,
+            subject,
+        )
+        return
+
+    if not settings.smtp_password:
+        logger.warning(
+            "[EmailSender] SMTP_PASSWORD not configured — cannot send email to %s | subject=%s. "
+            "Set SMTP_PASSWORD environment variable (Render dashboard or .env).",
             to_email,
             subject,
         )
@@ -35,44 +57,144 @@ async def _send(
     try:
         import aiosmtplib  # type: ignore
 
-        sender_email = (
-            settings.smtp_user
-            if (settings.smtp_user and ("gmail" in settings.smtp_user or settings.smtp_from_email in ("", "noreply@denno.app")))
-            else (settings.smtp_from_email or settings.smtp_user or "noreply@denno.app")
-        )
-        sender_name = settings.smtp_from_name or "Denno Career OS"
+        # Resolve the sender address:
+        # For Gmail, the From address MUST exactly match the authenticated SMTP_USER.
+        # Gmail's servers reject any mismatched From header with a 535 error.
+        # Also treat "noreply@denno.app" as a placeholder that should be replaced.
+        _placeholder_from = ("", "noreply@denno.app", "noreply@denno.app ".strip())
+        is_gmail = bool(settings.smtp_host and "gmail" in settings.smtp_host.lower())
+        if is_gmail or (settings.smtp_from_email or "").strip() in _placeholder_from:
+            # Force sender to match the authenticated account (required by Gmail)
+            sender_email = (settings.smtp_user or "").strip()
+        else:
+            sender_email = (
+                settings.smtp_from_email or settings.smtp_user or "noreply@denno.app"
+            ).strip()
+
+        if not sender_email:
+            sender_email = (settings.smtp_user or "noreply@denno.app").strip()
+
+        sender_name = (settings.smtp_from_name or "Denno Career OS").strip()
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = f"{sender_name} <{sender_email}>"
         msg["To"] = to_email
+        msg["X-Mailer"] = "Denno Career OS"
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
         msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_user,
-            password=settings.smtp_password.replace(" ", "") if settings.smtp_password else "",
-            use_tls=settings.smtp_use_ssl,
-            start_tls=settings.smtp_tls and not settings.smtp_use_ssl,
-            sender=sender_email,
+        # Strip ALL spaces from app password — Gmail App Passwords are 16 chars, no spaces.
+        # Users sometimes copy them with spaces between groups (e.g. "abcd efgh ijkl mnop").
+        smtp_password = (settings.smtp_password or "").replace(" ", "")
+
+        # Auto-detect SSL mode from port number:
+        #   Port 465 → use_tls=True  (SMTPS — direct SSL on connect)
+        #   Port 587  → start_tls=True (STARTTLS — plain connect then upgrade)
+        #   Other ports → honour the SMTP_USE_SSL setting
+        # This prevents the common misconfiguration of port 465 + STARTTLS which always fails.
+        port = settings.smtp_port
+        if port == 465:
+            use_ssl = True
+        elif port == 587:
+            use_ssl = False
+        else:
+            use_ssl = settings.smtp_use_ssl
+
+        logger.info(
+            "[EmailSender] Attempting SMTP send to=%s via %s:%d | mode=%s | from=%s | subject=%s",
+            to_email,
+            settings.smtp_host,
+            port,
+            "SSL/SMTPS" if use_ssl else "STARTTLS",
+            sender_email,
+            subject,
         )
-        logger.info("[EmailSender] Email sent to %s | subject=%s", to_email, subject)
+
+        # aiosmtplib: use_tls=True → immediate SSL on connect (port 465)
+        # start_tls=True → STARTTLS upgrade after plain connect (port 587)
+        # These are mutually exclusive; never pass both.
+        if use_ssl:
+            # Port 465 — direct SSL (SMTPS)
+            await asyncio.wait_for(
+                aiosmtplib.send(
+                    msg,
+                    hostname=settings.smtp_host,
+                    port=port,
+                    username=settings.smtp_user,
+                    password=smtp_password,
+                    use_tls=True,
+                    sender=sender_email,
+                ),
+                timeout=_SMTP_TIMEOUT,
+            )
+        else:
+            # Port 587 — STARTTLS (plain → encrypted upgrade)
+            await asyncio.wait_for(
+                aiosmtplib.send(
+                    msg,
+                    hostname=settings.smtp_host,
+                    port=port,
+                    username=settings.smtp_user,
+                    password=smtp_password,
+                    start_tls=True,
+                    sender=sender_email,
+                ),
+                timeout=_SMTP_TIMEOUT,
+            )
+        logger.info("[EmailSender] ✓ Email sent to %s | subject=%s", to_email, subject)
+
+
     except ImportError:
-        logger.warning(
+        logger.error(
             "[EmailSender] aiosmtplib not installed — cannot send email to %s. "
             "Run: pip install aiosmtplib",
             to_email,
         )
-    except Exception as exc:
+        raise
+    except asyncio.TimeoutError:
         logger.error(
-            "[EmailSender] Failed to send email to %s | subject=%s | error=%s",
+            "[EmailSender] SMTP connection timed out after %ds sending to %s | host=%s:%d",
+            _SMTP_TIMEOUT,
             to_email,
-            subject,
-            exc,
+            settings.smtp_host,
+            settings.smtp_port,
         )
+        raise RuntimeError(
+            f"SMTP connection timed out connecting to {settings.smtp_host}:{settings.smtp_port}. "
+            "Check your SMTP_HOST, SMTP_PORT, and firewall settings."
+        )
+    except Exception as exc:
+        # Log SMTP-specific details to help with debugging in Render logs
+        error_str = str(exc)
+        if "535" in error_str or "authentication" in error_str.lower() or "credentials" in error_str.lower():
+            logger.error(
+                "[EmailSender] SMTP AUTH FAILED for %s — check SMTP_USER and SMTP_PASSWORD. "
+                "If using Gmail, ensure you're using a 16-char App Password (not your login password). "
+                "Enable 2FA then create one at: https://myaccount.google.com/apppasswords | error=%s",
+                settings.smtp_user,
+                exc,
+            )
+        elif "534" in error_str or "less secure" in error_str.lower():
+            logger.error(
+                "[EmailSender] Gmail blocked login — enable 2-Step Verification and use an App Password. "
+                "See: https://myaccount.google.com/apppasswords | error=%s",
+                exc,
+            )
+        elif "connection" in error_str.lower() or "refused" in error_str.lower():
+            logger.error(
+                "[EmailSender] SMTP connection refused to %s:%d — check SMTP_HOST/SMTP_PORT settings | error=%s",
+                settings.smtp_host,
+                settings.smtp_port,
+                exc,
+            )
+        else:
+            logger.error(
+                "[EmailSender] Failed to send email to %s | subject=%s | error=%s",
+                to_email,
+                subject,
+                exc,
+            )
         raise
 
 
@@ -90,8 +212,7 @@ async def send_password_reset(to_email: str, reset_token: str, first_name: str =
         f"If you didn't request this, you can safely ignore this email.\n\n"
         f"— The Denno Team"
     )
-    html_body = f"""
-<!DOCTYPE html>
+    html_body = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0f172a;font-family:Inter,system-ui,sans-serif;">
@@ -152,8 +273,7 @@ async def send_welcome(to_email: str, first_name: str = "") -> None:
         f"Open your dashboard: {dashboard_link}\n\n"
         f"— The Denno Team"
     )
-    html_body = f"""
-<!DOCTYPE html>
+    html_body = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0f172a;font-family:Inter,system-ui,sans-serif;">
@@ -219,8 +339,7 @@ async def send_notification_digest(
         for n in notifications[:10]
     )
 
-    html_body = f"""
-<!DOCTYPE html>
+    html_body = f"""<!DOCTYPE html>
 <html lang="en">
 <body style="margin:0;padding:0;background:#0f172a;font-family:Inter,system-ui,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 0;">

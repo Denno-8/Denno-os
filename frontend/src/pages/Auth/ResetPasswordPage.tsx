@@ -77,6 +77,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [tokenExpired, setTokenExpired] = useState(false);
 
   useEffect(() => {
     if (urlToken) setToken(urlToken);
@@ -112,9 +113,11 @@ export default function ResetPasswordPage() {
         if (err.status === 422) {
           setError("Password does not meet security requirements: must be 8–128 chars with uppercase, digit, and special character.");
         } else if (err.status === 400) {
-          setError("Reset link is invalid or expired. Please request a new password reset link from the login page.");
+          setTokenExpired(true);
+          setError("Reset link is invalid or expired. Please request a new password reset link.");
         } else {
           setError(typeof d === "string" ? d : "Failed to reset password. The link may have expired — please request a new one.");
+          setTokenExpired(true);
         }
       } else {
         setError("An unexpected error occurred. Please try again.");
@@ -201,20 +204,36 @@ export default function ResetPasswordPage() {
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              flexDirection: "column",
               gap: "10px",
               padding: "12px 16px",
               borderRadius: "12px",
               background: "rgba(239,68,68,0.12)",
               border: "1px solid rgba(239,68,68,0.25)",
-              color: "#f87171",
-              fontSize: "13px",
-              fontWeight: 600,
               marginBottom: "20px",
             }}
           >
-            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-            <span>{error}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#f87171" }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: "13px", fontWeight: 600 }}>{error}</span>
+            </div>
+            {tokenExpired && (
+              <Link
+                to="/login"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  color: "#60a5fa",
+                  textDecoration: "none",
+                  paddingTop: "2px",
+                }}
+              >
+                → Request a new password reset link
+              </Link>
+            )}
           </div>
         )}
 

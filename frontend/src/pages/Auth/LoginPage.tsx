@@ -106,6 +106,7 @@ export default function LoginPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [resetToken, setResetToken] = useState("");
+  const [resetLink, setResetLink] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +136,7 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  const switchMode = (m: Mode) => { setMode(m); setError(null); setInfo(null); };
+  const switchMode = (m: Mode) => { setMode(m); setError(null); setInfo(null); setResetLink(""); };
 
   const handleApiError = (err: unknown, fallback: string) => {
     if (err instanceof ApiError) {
@@ -159,15 +160,22 @@ export default function LoginPage() {
       else if (mode === "register") { await authService.register(email, password, firstName, lastName); queryClient.clear(); navigate("/applications"); }
       else if (mode === "forgot") {
         const r = await authService.requestPasswordReset(email);
-        setInfo(r.message);
-        if (r.reset_token) {
-          setResetToken(r.reset_token);
+        if (r.email_sent) {
+          setInfo(`Reset link sent! Check your inbox at ${email}. The link expires in 60 minutes.`);
+        } else if (r.smtp_warning) {
+          setInfo(r.smtp_warning || r.message);
+        } else {
+          setInfo(r.message);
         }
+        if (r.reset_token) setResetToken(r.reset_token);
+        if (r.reset_link) setResetLink(r.reset_link);
+        if (r.smtp_error && !r.email_sent) setError(`SMTP Error: ${r.smtp_error}`);
       }
       else if (mode === "reset") { const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login"); }
     } catch (e) { handleApiError(e, "Something went wrong. Check your details."); }
     finally { setLoading(false); }
   };
+
 
   const handleKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") submit(); };
 
@@ -547,6 +555,19 @@ export default function LoginPage() {
                   >
                     <span>Set New Password Now</span> <ArrowRight size={14} />
                   </button>
+                )}
+                {mode === "forgot" && resetLink && (
+                  <div style={{ marginTop: "4px", padding: "10px 12px", borderRadius: "9px", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.35)" }}>
+                    <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#92400e", marginBottom: "4px" }}>
+                      🛠 Dev mode — SMTP not configured. Use this link to test the reset flow:
+                    </div>
+                    <a
+                      href={resetLink}
+                      style={{ fontSize: "11px", color: "#1d4ed8", wordBreak: "break-all", fontWeight: 600, textDecoration: "underline" }}
+                    >
+                      {resetLink}
+                    </a>
+                  </div>
                 )}
               </div>
             )}
