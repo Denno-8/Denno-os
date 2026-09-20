@@ -111,37 +111,114 @@ async def _send(
             subject,
         )
 
-        # aiosmtplib: use_tls=True → immediate SSL on connect (port 465)
-        # start_tls=True → STARTTLS upgrade after plain connect (port 587)
-        # These are mutually exclusive; never pass both.
-        if use_ssl:
-            # Port 465 — direct SSL (SMTPS)
-            await asyncio.wait_for(
-                aiosmtplib.send(
-                    msg,
-                    hostname=settings.smtp_host,
-                    port=port,
-                    username=settings.smtp_user,
-                    password=smtp_password,
-                    use_tls=True,
-                    sender=sender_email,
-                ),
-                timeout=_SMTP_TIMEOUT,
+        # Multi-strategy attempt: try aiosmtplib first, fall back to IPv4 smtplib (port 587 / 465)
+        send_success = False
+        last_error = None
+
+        # Strategy 1: Primary aiosmtplib attempt
+        try:
+            if use_ssl:
+                await asyncio.wait_for(
+                    aiosmtplib.send(
+                        msg,
+                        hostname=settings.smtp_host,
+                        port=port,
+                        username=settings.smtp_user,
+                        password=smtp_password,
+                        use_tls=True,
+                        sender=sender_email,
+                    ),
+                    timeout=15,
+                )
+            else:
+                await asyncio.wait_for(
+                    aiosmtplib.send(
+                        msg,
+                        hostname=settings.smtp_host,
+                        port=port,
+                        username=settings.smtp_user,
+                        password=smtp_password,
+                        start_tls=True,
+                        sender=sender_email,
+                    ),
+                    timeout=15,
+                )
+            send_success = True
+        except Exception as primary_exc:
+            last_error = primary_exc
+            logger.warning(
+                "[EmailSender] Primary aiosmtplib send failed (%s). Attempting IPv4 fallback...",
+                primary_exc,
             )
-        else:
-            # Port 587 — STARTTLS (plain → encrypted upgrade)
-            await asyncio.wait_for(
-                aiosmtplib.send(
-                    msg,
-                    hostname=settings.smtp_host,
-                    port=port,
-                    username=settings.smtp_user,
-                    password=smtp_password,
-                    start_tls=True,
-                    sender=sender_email,
-                ),
-                timeout=_SMTP_TIMEOUT,
-            )
+
+        # Strategy 2: If primary failed (e.g. IPv6 network unreachable Errno 101), try IPv4 multi-port fallback
+        if not send_success:
+            def _sync_ipv4_send():
+                import socket
+                import smtplib
+                import ssl
+
+                def _create_ipv4_conn(addr, conn_timeout=12):
+                    h, p = addr
+                    for res in socket.getaddrinfo(h, p, socket.AF_INET, socket.SOCK_STREAM):
+                        af, socktype, proto, canon, sa = res
+                        s = socket.socket(af, socktype, proto)
+                        s.settimeout(conn_timeout)
+                        s.connect(sa)
+                        return s
+                    raise socket.error(f"No IPv4 address for {h}")
+
+                # Try (mode, port) combinations
+                strategies = [
+                    ("IPv4_TLS", 587),
+                    ("IPv4_SSL", 465),
+                    ("STD_TLS", 587),
+                    ("STD_SSL", 465),
+                ]
+                
+                sync_errors = []
+                for mode, p in strategies:
+                    try:
+                        if mode == "IPv4_TLS":
+                            raw_sock = _create_ipv4_conn((settings.smtp_host, p))
+                            with smtplib.SMTP(settings.smtp_host, p, timeout=15) as s:
+                                s.sock = raw_sock
+                                s.ehlo()
+                                s.starttls()
+                                s.ehlo()
+                                s.login(settings.smtp_user, smtp_password)
+                                s.sendmail(sender_email, [to_email], msg.as_string())
+                                return True
+                        elif mode == "IPv4_SSL":
+                            raw_sock = _create_ipv4_conn((settings.smtp_host, p))
+                            ctx = ssl.create_default_context()
+                            ssl_sock = ctx.wrap_socket(raw_sock, server_hostname=settings.smtp_host)
+                            with smtplib.SMTP_SSL(settings.smtp_host, p, timeout=15) as s:
+                                s.sock = ssl_sock
+                                s.login(settings.smtp_user, smtp_password)
+                                s.sendmail(sender_email, [to_email], msg.as_string())
+                                return True
+                        elif mode == "STD_TLS":
+                            with smtplib.SMTP(settings.smtp_host, p, timeout=15) as s:
+                                s.ehlo()
+                                s.starttls()
+                                s.ehlo()
+                                s.login(settings.smtp_user, smtp_password)
+                                s.sendmail(sender_email, [to_email], msg.as_string())
+                                return True
+                        elif mode == "STD_SSL":
+                            with smtplib.SMTP_SSL(settings.smtp_host, p, timeout=15) as s:
+                                s.login(settings.smtp_user, smtp_password)
+                                s.sendmail(sender_email, [to_email], msg.as_string())
+                                return True
+                    except Exception as err:
+                        sync_errors.append(f"{mode}:{p} -> {err}")
+
+                raise RuntimeError(f"All SMTP strategies failed: {'; '.join(sync_errors)}")
+
+            await asyncio.to_thread(_sync_ipv4_send)
+            send_success = True
+
         logger.info("[EmailSender] ✓ Email sent to %s | subject=%s", to_email, subject)
 
 

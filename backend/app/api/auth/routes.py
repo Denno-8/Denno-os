@@ -360,42 +360,82 @@ async def smtp_diagnostic():
     port = settings.smtp_port
     use_ssl = port == 465
 
-    # Attempt a real SMTP connection test
-    test_result = {"attempted": False, "success": False, "error": None, "error_type": None}
+    # Attempt real SMTP connection tests with IPv4 socket resolution
+    test_result = {"attempted": False, "success": False, "error": None, "error_type": None, "working_mode": None}
 
     if settings.smtp_user and settings.smtp_password:
+        import socket
         smtp_password = settings.smtp_password.replace(" ", "")
         test_result["attempted"] = True
-        try:
-            ctx = ssl.create_default_context()
-            if use_ssl:
-                with smtplib.SMTP_SSL(settings.smtp_host, port, timeout=12, context=ctx) as server:
-                    server.login(settings.smtp_user, smtp_password)
-                test_result["success"] = True
-                test_result["mode"] = "SSL (port 465)"
-            else:
-                with smtplib.SMTP(settings.smtp_host, port, timeout=12) as server:
-                    server.ehlo()
-                    server.starttls(context=ctx)
-                    server.ehlo()
-                    server.login(settings.smtp_user, smtp_password)
-                test_result["success"] = True
-                test_result["mode"] = "STARTTLS (port 587)"
-        except smtplib.SMTPAuthenticationError as exc:
-            test_result["error_type"] = "AUTH_FAILED (535)"
-            test_result["error"] = (
-                f"Authentication rejected: {exc}. "
-                "Use a 16-char Gmail App Password from https://myaccount.google.com/apppasswords"
-            )
-        except smtplib.SMTPException as exc:
-            test_result["error_type"] = "SMTP_ERROR"
-            test_result["error"] = str(exc)
-        except OSError as exc:
-            test_result["error_type"] = "CONNECTION_REFUSED"
-            test_result["error"] = str(exc)
-        except Exception as exc:
-            test_result["error_type"] = type(exc).__name__
-            test_result["error"] = str(exc)
+
+        def _create_ipv4_conn(host, port_num, timeout_sec=10):
+            for res in socket.getaddrinfo(host, port_num, socket.AF_INET, socket.SOCK_STREAM):
+                af, socktype, proto, canon, sa = res
+                s = socket.socket(af, socktype, proto)
+                s.settimeout(timeout_sec)
+                s.connect(sa)
+                return s
+            raise socket.error(f"No IPv4 address for {host}")
+
+        strategies = [
+            ("IPv4_TLS", 587),
+            ("IPv4_SSL", 465),
+            ("STD_TLS", 587),
+            ("STD_SSL", 465),
+        ]
+
+        attempt_errors = []
+        for mode, p in strategies:
+            try:
+                ctx = ssl.create_default_context()
+                if mode == "IPv4_TLS":
+                    raw_sock = _create_ipv4_conn(settings.smtp_host, p)
+                    with smtplib.SMTP(settings.smtp_host, p, timeout=10) as s:
+                        s.sock = raw_sock
+                        s.ehlo()
+                        s.starttls(context=ctx)
+                        s.ehlo()
+                        s.login(settings.smtp_user, smtp_password)
+                    test_result["success"] = True
+                    test_result["working_mode"] = f"IPv4 STARTTLS (port {p})"
+                    break
+                elif mode == "IPv4_SSL":
+                    raw_sock = _create_ipv4_conn(settings.smtp_host, p)
+                    ssl_sock = ctx.wrap_socket(raw_sock, server_hostname=settings.smtp_host)
+                    with smtplib.SMTP_SSL(settings.smtp_host, p, timeout=10) as s:
+                        s.sock = ssl_sock
+                        s.login(settings.smtp_user, smtp_password)
+                    test_result["success"] = True
+                    test_result["working_mode"] = f"IPv4 Direct SSL (port {p})"
+                    break
+                elif mode == "STD_TLS":
+                    with smtplib.SMTP(settings.smtp_host, p, timeout=10) as s:
+                        s.ehlo()
+                        s.starttls(context=ctx)
+                        s.ehlo()
+                        s.login(settings.smtp_user, smtp_password)
+                    test_result["success"] = True
+                    test_result["working_mode"] = f"STD STARTTLS (port {p})"
+                    break
+                elif mode == "STD_SSL":
+                    with smtplib.SMTP_SSL(settings.smtp_host, p, timeout=10) as s:
+                        s.login(settings.smtp_user, smtp_password)
+                    test_result["success"] = True
+                    test_result["working_mode"] = f"STD Direct SSL (port {p})"
+                    break
+            except smtplib.SMTPAuthenticationError as exc:
+                test_result["error_type"] = "AUTH_FAILED (535)"
+                test_result["error"] = (
+                    f"Authentication rejected on {mode}:{p}: {exc}. "
+                    "Use a 16-char Gmail App Password from https://myaccount.google.com/apppasswords"
+                )
+                break
+            except Exception as exc:
+                attempt_errors.append(f"{mode}:{p} -> {exc}")
+
+        if not test_result["success"] and not test_result["error"]:
+            test_result["error_type"] = "ALL_CONNECTION_MODES_FAILED"
+            test_result["error"] = " | ".join(attempt_errors)
 
     return {
         "config": config,
