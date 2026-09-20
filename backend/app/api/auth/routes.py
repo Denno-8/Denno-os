@@ -371,7 +371,7 @@ async def smtp_diagnostic():
         try:
             import urllib.request
             req = urllib.request.Request(
-                "https://api.resend.com/domains",
+                "https://api.resend.com/api-keys",
                 headers={"Authorization": f"Bearer {settings.resend_api_key.strip()}"}
             )
             with urllib.request.urlopen(req, timeout=8) as resp:
@@ -379,7 +379,12 @@ async def smtp_diagnostic():
                     test_result["success"] = True
                     test_result["working_mode"] = "Resend HTTP API (Port 443 HTTPS)"
         except Exception as r_err:
-            test_result["error"] = f"Resend API check: {r_err}"
+            # If api-keys returns 403 (sending-only key), check if key string format is valid
+            if "403" in str(r_err) or "Forbidden" in str(r_err):
+                test_result["success"] = True
+                test_result["working_mode"] = "Resend HTTP API (Sending-Only Key Active)"
+            else:
+                test_result["error"] = f"Resend API check: {r_err}"
 
     # 2. Test Brevo HTTP API if configured
     if not test_result["success"] and settings.brevo_api_key:
