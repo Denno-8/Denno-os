@@ -99,7 +99,8 @@ async def init_db():
                    ADD COLUMN IF NOT EXISTS jobs_found integer DEFAULT 0,
                    ADD COLUMN IF NOT EXISTS last_checked_at timestamp with time zone DEFAULT now(),
                    ADD COLUMN IF NOT EXISTS description text DEFAULT '',
-                   ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true""",
+                   ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+                   ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
 
                 """ALTER TABLE IF EXISTS cv_versions
                    ADD COLUMN IF NOT EXISTS name character varying(255) NOT NULL DEFAULT 'Untitled CV',
