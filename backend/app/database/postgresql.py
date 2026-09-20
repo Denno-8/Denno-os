@@ -43,8 +43,14 @@ async def init_db():
 
     is_sqlite = False
     try:
+        db_url = settings.database_url or ""
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
         engine = create_async_engine(
-            settings.database_url,
+            db_url,
             echo=False,
             future=True,
             pool_pre_ping=True,
