@@ -907,6 +907,157 @@ class EmailService:
             res["smtp_error"] = smtp_error_msg
         return res
 
+    async def send_followup_email(
+        self,
+        user_id: int,
+        recruiter_email: str,
+        company_name: str,
+        role_title: str,
+        subject: str,
+        body: str,
+        application_id: int | None = None,
+    ) -> dict:
+        """
+        Dispatches an official AI follow-up email to a recruiter via Brevo HTTP API (or SMTP fallback),
+        stores a copy in the emails database table, and triggers an in-app notification.
+        """
+        user_res = await self.repo.session.execute(select(User).where(User.id == user_id))
+        current_user = user_res.scalars().first()
+
+        applicant_name = "Candidate"
+        applicant_email = ""
+        if current_user:
+            full_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+            applicant_name = full_name or (current_user.email.split("@")[0].replace(".", " ").replace("_", " ").title() if current_user.email else "Candidate")
+            applicant_email = current_user.email or ""
+
+        if applicant_name and applicant_name not in ("Candidate", "Applicant", "Job Applicant"):
+            body = body.replace("Applicant", applicant_name).replace("Job Applicant", applicant_name)
+
+        plain_body = body.strip()
+        formatted_paragraphs = "".join([
+            f"<p style='margin-bottom: 12px; line-height: 1.6;'>{line.strip()}</p>"
+            for line in plain_body.split("\n") if line.strip()
+        ])
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #1e293b; line-height: 1.6; padding: 10px;">
+  {formatted_paragraphs}
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+  <p style="color: #64748b; font-size: 12px;">Sent via Denno Career OS · Follow-up for {role_title} at {company_name}</p>
+</body>
+</html>"""
+
+        sent_status = False
+        smtp_error_msg = None
+
+        _placeholder_domains = ("denno.app", "denno.com", "denno.os", "example.com")
+        raw_b_from = (settings.brevo_from_email or "").strip()
+        if not raw_b_from or any(raw_b_from.endswith("@" + d) for d in _placeholder_domains):
+            if settings.smtp_user and not any(settings.smtp_user.endswith("@" + d) for d in _placeholder_domains):
+                raw_b_from = settings.smtp_user.strip()
+            elif settings.smtp_from_email and not any(settings.smtp_from_email.endswith("@" + d) for d in _placeholder_domains):
+                raw_b_from = settings.smtp_from_email.strip()
+            else:
+                raw_b_from = "deno14619@gmail.com"
+
+        brevo_from = raw_b_from
+        sender_name = applicant_name or settings.smtp_from_name or "Job Candidate"
+
+        if not settings.emails_enabled:
+            smtp_error_msg = "Emails are disabled in environment settings (EMAILS_ENABLED=false)."
+        elif not recruiter_email:
+            smtp_error_msg = "Recruiter email is missing."
+        else:
+            if settings.brevo_api_key:
+                try:
+                    import json as _json_b, urllib.request as _ureq
+                    import asyncio as _aio
+
+                    b_key = settings.brevo_api_key.strip()
+                    _brevo_payload = {
+                        "sender": {"name": sender_name, "email": brevo_from},
+                        "to": [{"email": recruiter_email}],
+                        "subject": subject,
+                        "htmlContent": html_body,
+                        "textContent": plain_body,
+                    }
+                    if applicant_email and "@" in str(applicant_email):
+                        _brevo_payload["replyTo"] = {"email": applicant_email, "name": sender_name}
+
+                    def _do_brevo_http():
+                        _req = _ureq.Request(
+                            "https://api.brevo.com/v3/smtp/email",
+                            data=_json_b.dumps(_brevo_payload).encode("utf-8"),
+                            headers={
+                                "api-key": b_key,
+                                "Content-Type": "application/json",
+                                "User-Agent": "DennoCareerOS/1.0",
+                            },
+                            method="POST",
+                        )
+                        try:
+                            with _ureq.urlopen(_req, timeout=15) as _r:
+                                return _r.status, None
+                        except _ureq.HTTPError as _h_err:
+                            try:
+                                _b_err = _h_err.read().decode("utf-8", errors="replace")
+                            except Exception:
+                                _b_err = str(_h_err)
+                            return _h_err.code, _b_err
+
+                    _br_code, _br_err_msg = await _aio.to_thread(_do_brevo_http)
+                    if _br_code in (200, 201, 202):
+                        sent_status = True
+                        print(f"[EmailService] ✓ Follow-up sent via Brevo HTTP API to={recruiter_email}")
+                    else:
+                        smtp_error_msg = f"Brevo HTTP API failed ({_br_code}): {_br_err_msg}"
+                except Exception as _brevo_err:
+                    smtp_error_msg = str(_brevo_err)
+
+        doc = {
+            "user_id": user_id,
+            "from_name": f"Outbound Follow-Up to {recruiter_email or company_name}",
+            "subject": subject,
+            "category": "Follow-Up Sent",
+            "body": plain_body,
+            "read": True,
+            "recommended_action": f"Check inbox for recruiter response from {recruiter_email}.",
+            "application_id": application_id,
+            "source": "smtp_sent" if sent_status else "application_dispatch"
+        }
+        created = await self.repo.create(doc)
+
+        try:
+            from app.services.notification_service import NotificationService
+            from app.schemas.notification import NotificationCreate
+            notif_svc = NotificationService(self.repo.session)
+            if sent_status:
+                n_title = "Follow-up Email Sent! 📧"
+                n_msg = f"Dispatched AI follow-up for {role_title} at {company_name} to {recruiter_email}."
+            else:
+                n_title = "Follow-up Logged 📧"
+                n_msg = f"Follow-up for {role_title} at {company_name} logged: {smtp_error_msg or 'Outbound record created.'}"
+
+            await notif_svc.create(user_id, NotificationCreate(
+                title=n_title,
+                message=n_msg,
+                type="application",
+                link="/applications"
+            ))
+        except Exception as notif_err:
+            print(f"Error creating notification: {notif_err}")
+
+        return {
+            "email": _serialize(created),
+            "sent": sent_status,
+            "smtp_warning": smtp_error_msg,
+            "recruiter_email": recruiter_email,
+            "company_name": company_name,
+            "role_title": role_title,
+        }
+
     async def sync_inbound_responses(self, user_id: int) -> dict:
         """
         Connects to candidate's Gmail via IMAP, fetches recent recruiter response emails,

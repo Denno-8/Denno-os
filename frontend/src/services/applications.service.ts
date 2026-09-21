@@ -27,6 +27,15 @@ export const applicationsService = {
   getFollowUpDraft: (id: string, tone: string = "polite") =>
     api.post<FollowUpDraftResponse>(`/applications/${id}/followup-draft?tone=${encodeURIComponent(tone)}`, {}),
 
+  sendFollowUpEmail: (
+    id: string,
+    payload?: { subject?: string; body?: string; tone?: string; recruiter_email?: string }
+  ) =>
+    api.post<{ sent: boolean; smtp_warning?: string; recruiter_email: string }>(
+      `/applications/${id}/send-followup`,
+      payload || {}
+    ),
+
   getFunnelAnalytics: () =>
     api.get<PipelineFunnelAnalytics>("/applications/analytics/funnel"),
 };

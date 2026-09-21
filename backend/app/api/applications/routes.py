@@ -151,3 +151,33 @@ async def batch_dispatch_applications(
     return await svc.batch_send_applications(uid, payload.application_ids)
 
 
+class FollowUpDispatchPayload(BaseModel):
+    subject: str | None = None
+    body: str | None = None
+    tone: str = "polite"
+    recruiter_email: str | None = None
+
+
+@router.post("/{app_id}/send-followup")
+async def send_followup_email(
+    app_id: int,
+    payload: FollowUpDispatchPayload = FollowUpDispatchPayload(),
+    user_id: str = Depends(get_current_user_id),
+    service: ApplicationService = Depends(get_service),
+):
+    """Dispatches an AI follow-up email directly to the recruiter via Brevo."""
+    try:
+        uid = int(user_id)
+    except Exception:
+        uid = 1
+    return await service.send_followup_email(
+        app_id=app_id,
+        user_id=uid,
+        subject=payload.subject,
+        body=payload.body,
+        tone=payload.tone,
+        recruiter_email=payload.recruiter_email,
+    )
+
+
+

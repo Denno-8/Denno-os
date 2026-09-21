@@ -496,3 +496,48 @@ class ApplicationService:
             },
         }
 
+    async def send_followup_email(
+        self,
+        app_id: int,
+        user_id: int,
+        subject: str | None = None,
+        body: str | None = None,
+        tone: str = "polite",
+        recruiter_email: str | None = None,
+    ) -> dict:
+        """Dispatches an official AI follow-up email to the recruiter for an existing application via Brevo / SMTP."""
+        application = await self.repo.get(app_id, user_id)
+        if not application:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        if not subject or not body:
+            draft = await self.generate_followup_draft(app_id, user_id, tone=tone)
+            if draft:
+                subject = subject or draft["subject"]
+                body = body or draft["body"]
+
+        target_recruiter = recruiter_email or application.recruiter_email
+        if not target_recruiter:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Recruiter email is missing for this application.")
+
+        from app.services.email_service import EmailService
+        email_svc = EmailService(self.repo.session)
+
+        res = await email_svc.send_followup_email(
+            user_id=user_id,
+            recruiter_email=target_recruiter,
+            company_name=application.company_name,
+            role_title=application.role,
+            subject=subject or f"Following up on {application.role} application",
+            body=body or f"Dear Hiring Team at {application.company_name},\n\nI am following up on my application for the {application.role} position.",
+            application_id=app_id,
+        )
+
+        if res and res.get("sent"):
+            if application.stage in ("Applied", "Unresponded"):
+                await self.repo.update_stage(app_id, user_id, "Followed Up")
+
+        return res
+
