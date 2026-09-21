@@ -407,6 +407,9 @@ class JobSource(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     company_name = Column("name", String(255), nullable=False)
+    # 'type' was created NOT NULL by Alembic 0001 but is not used by the aggregator.
+    # Migration 0003 drops the NOT NULL constraint; kept here for schema completeness.
+    type = Column(String(50), nullable=True, default="scrape")
     url = Column(String(500), default="")
     description = Column(Text, default="")
     is_active = Column(Boolean, default=True)
