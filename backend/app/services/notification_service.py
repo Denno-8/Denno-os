@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,14 +55,15 @@ class NotificationService:
     async def mark_all_read(self, user_id: int) -> bool:
         return await self.repo.mark_all_read(user_id)
 
-    async def batch_mark_read(self, notification_ids: list[int], user_id: int, read: bool = True) -> bool:
+    async def batch_mark_read(self, notification_ids: List[int], user_id: int, read: bool = True) -> bool:
         return await self.repo.batch_update_read(notification_ids, user_id, read)
 
     async def delete_one(self, notification_id: int, user_id: int) -> bool:
         return await self.repo.delete_one(notification_id, user_id)
 
-    async def batch_delete(self, notification_ids: list[int], user_id: int) -> bool:
+    async def batch_delete(self, notification_ids: List[int], user_id: int) -> bool:
         return await self.repo.batch_delete(notification_ids, user_id)
+
 
     async def clear_all(self, user_id: int) -> bool:
         return await self.repo.clear_all(user_id)
