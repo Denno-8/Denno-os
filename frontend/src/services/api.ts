@@ -25,10 +25,25 @@ export class ApiError extends Error {
   public detail: string;
 
   constructor(public status: number, public body: unknown) {
-    const extractedDetail =
+    const rawDetail =
       typeof body === "string"
         ? body
-        : (body as any)?.detail || (body as any)?.message;
+        : (body as any)?.detail ?? (body as any)?.message;
+
+    let extractedDetail: string | null = null;
+    if (Array.isArray(rawDetail)) {
+      extractedDetail = rawDetail
+        .map((item: any) => {
+          if (typeof item === "string") return item;
+          const msg = item?.msg || item?.message;
+          if (msg) return msg.replace(/^Value error,\s*/i, "");
+          return JSON.stringify(item);
+        })
+        .join("; ");
+    } else if (typeof rawDetail === "string") {
+      extractedDetail = rawDetail;
+    }
+
     const detailMsg =
       extractedDetail ||
       (status === 429

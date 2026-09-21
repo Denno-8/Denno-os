@@ -18,25 +18,28 @@ type Mode = "login" | "register" | "forgot" | "reset";
 
 /* ── Password strength ── */
 function PasswordStrength({ password }: { password: string }) {
-  const score = (() => {
-    let s = 0;
-    if (password.length >= 8) s++;
-    if (/[A-Z]/.test(password)) s++;
-    if (/[0-9]/.test(password)) s++;
-    if (/[^A-Za-z0-9]/.test(password)) s++;
-    return s;
-  })();
-  const labels = ["", "Weak", "Fair", "Strong", "Very Strong"];
+  const hasMinLength = password.length >= 8;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasDigit = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+  const score = [hasMinLength, hasUpper, hasDigit, hasSpecial].filter(Boolean).length;
+  const labels = ["", "Weak", "Fair", "Good", "Strong & Valid ✓"];
   const colors = ["", "#ef4444", "#f59e0b", "#3b82f6", "#10b981"];
   if (!password) return null;
   return (
     <div style={{ marginTop: "6px" }}>
-      <div style={{ display: "flex", gap: "4px", marginBottom: "3px" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} style={{ flex: 1, height: "3px", borderRadius: "2px", background: i <= score ? colors[score] : "rgba(148,163,184,0.2)", transition: "background 0.3s" }} />
+          <div key={i} style={{ flex: 1, height: "4px", borderRadius: "2px", background: i <= score ? colors[score] : "rgba(148,163,184,0.2)", transition: "background 0.3s" }} />
         ))}
       </div>
-      <span style={{ fontSize: "11px", fontWeight: 700, color: colors[score] }}>{labels[score]}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "11px", fontWeight: 700, color: colors[score] }}>{labels[score]}</span>
+        <span style={{ fontSize: "10.5px", color: "rgba(148,163,184,0.8)", fontWeight: 500 }}>
+          Req: 8+ chars, 1 uppercase, 1 digit, 1 special (!@#...)
+        </span>
+      </div>
     </div>
   );
 }
@@ -140,13 +143,13 @@ export default function LoginPage() {
 
   const handleApiError = (err: unknown, fallback: string) => {
     if (err instanceof ApiError) {
-      const d = (err.body as any)?.detail || err.message;
-      if (typeof d === "string" && d.trim()) setError(d);
-      else if (err.status === 401) setError("Incorrect email or password. Please try again.");
+      const detailStr = err.detail || (typeof (err.body as any)?.detail === "string" ? (err.body as any).detail : null);
+      if (err.status === 401) setError("Incorrect email or password. Please try again.");
       else if (err.status === 409) setError("An account with this email already exists. Try signing in.");
-      else if (err.status === 422) setError("Please check your inputs — some fields are invalid.");
+      else if (err.status === 422) setError(detailStr || "Please check your inputs — some fields are invalid.");
       else if (err.status === 429) setError("Rate limit reached (Too many attempts). Please wait 15 seconds and try again.");
       else if (err.status === 0) setError("Server cold start timeout. Please wait a moment and try again.");
+      else if (detailStr && detailStr.trim()) setError(detailStr);
       else setError(fallback);
     } else {
       setError("Server connection issue. Please wait a moment and try again.");
@@ -157,7 +160,16 @@ export default function LoginPage() {
     setError(null); setInfo(null); setLoading(true);
     try {
       if (mode === "login")    { await authService.login(email, password); queryClient.clear(); navigate("/applications"); }
-      else if (mode === "register") { await authService.register(email, password, firstName, lastName); queryClient.clear(); navigate("/applications"); }
+      else if (mode === "register") {
+        if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+          setError("Password must be at least 8 characters and include an uppercase letter, a digit, and a special character.");
+          setLoading(false);
+          return;
+        }
+        await authService.register(email, password, firstName, lastName);
+        queryClient.clear();
+        navigate("/applications");
+      }
       else if (mode === "forgot") {
         const r = await authService.requestPasswordReset(email);
         if (r.email_sent) {
