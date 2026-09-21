@@ -97,12 +97,14 @@ async def _send(
 
     if settings.brevo_api_key:
         try:
+            # Resolve the display/sender email — strip any unverified placeholder domains
+            _placeholder_domains = ("denno.app", "denno.com", "denno.os", "example.com")
             raw_brevo_from = (settings.brevo_from_email or "").strip()
-            if not raw_brevo_from or raw_brevo_from == "noreply@denno.app":
-                if settings.smtp_from_email and settings.smtp_from_email.strip() != "noreply@denno.app":
-                    raw_brevo_from = settings.smtp_from_email.strip()
-                elif settings.smtp_user:
+            if not raw_brevo_from or any(raw_brevo_from.endswith("@" + d) for d in _placeholder_domains):
+                if settings.smtp_user and not any(settings.smtp_user.endswith("@" + d) for d in _placeholder_domains):
                     raw_brevo_from = settings.smtp_user.strip()
+                elif settings.smtp_from_email and not any(settings.smtp_from_email.endswith("@" + d) for d in _placeholder_domains):
+                    raw_brevo_from = settings.smtp_from_email.strip()
                 else:
                     raw_brevo_from = to_email
 
@@ -111,13 +113,22 @@ async def _send(
 
             if b_key.startswith("xsmtpsib-"):
                 # User provided a Brevo SMTP Key (xsmtpsib-...) -> Send via Brevo SMTP Relay
+                # IMPORTANT: Brevo SMTP login username = your Brevo ACCOUNT email (smtp_user)
+                # NOT the sender display email — Brevo only accepts its own registered account emails.
                 import smtplib
                 def _send_brevo_smtp():
+                    # Use smtp_user as the SMTP login username (Brevo account email)
+                    # Fall back to brevo_from only if smtp_user is not set
+                    _smtp_login_user = (settings.smtp_user or brevo_from).strip()
+                    logger.info(
+                        "[EmailSender] Connecting to Brevo SMTP relay | login_user=%s | from=%s | to=%s",
+                        _smtp_login_user, brevo_from, to_email
+                    )
                     with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=12) as s:
                         s.ehlo()
                         s.starttls()
                         s.ehlo()
-                        s.login(brevo_from, b_key)
+                        s.login(_smtp_login_user, b_key)
                         msg = MIMEMultipart("alternative")
                         msg["Subject"] = subject
                         msg["From"] = f"{sender_name} <{brevo_from}>"
