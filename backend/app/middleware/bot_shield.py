@@ -85,6 +85,12 @@ class BotShieldMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
+        # ── Always allow CORS preflight OPTIONS requests to pass through ────
+        if request.method == "OPTIONS":
+            response: Response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            return response
+
         path = request.url.path
         ua = request.headers.get("user-agent", "")
 
@@ -96,7 +102,7 @@ class BotShieldMiddleware(BaseHTTPMiddleware):
                 _get_ip(request),
                 request_id,
             )
-            return _forbidden(request_id, "Request rejected")
+            return _forbidden(request, request_id, "Request rejected")
 
         # ── 3. Bot UA detection (skip health probes) ──────────────────────────
         if path not in _HEALTH_PATHS and ua:
@@ -109,7 +115,7 @@ class BotShieldMiddleware(BaseHTTPMiddleware):
                         _get_ip(request),
                         request_id,
                     )
-                    return _forbidden(request_id, "Request rejected")
+                    return _forbidden(request, request_id, "Request rejected")
 
         # ── 4. Pass through — attach request ID to response ───────────────────
         response: Response = await call_next(request)
@@ -125,9 +131,14 @@ def _get_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _forbidden(request_id: str, detail: str) -> JSONResponse:
+def _forbidden(request: Request, request_id: str, detail: str) -> JSONResponse:
+    origin = request.headers.get("origin", "*")
     return JSONResponse(
         status_code=403,
         content={"detail": detail},
-        headers={"X-Request-ID": request_id},
+        headers={
+            "X-Request-ID": request_id,
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        },
     )

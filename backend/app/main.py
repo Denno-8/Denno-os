@@ -139,40 +139,14 @@ app = FastAPI(
     redoc_url=_redoc_url,
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-# Placed FIRST (outermost) so ALL responses (including 429, 403, 500, 502/503) get CORS headers attached.
-_extra_origins: list[str] = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost:5176",
-    "http://127.0.0.1:5173",
-]
-_allow_regex = r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1)(:\d+)?"
+# ── Middleware Registration ────────────────────────────────────────────────────
+# Starlette builds its ASGI middleware stack in REVERSE order of app.add_middleware() calls.
+# Therefore, the LAST added middleware becomes the OUTERMOST (runs first on request, wraps all responses).
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.frontend_origin, *_extra_origins] if settings.frontend_origin else _extra_origins,
-    allow_origin_regex=_allow_regex,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 1. Audit Logger (innermost)
+app.add_middleware(AuditLoggerMiddleware)
 
-# ── GZip Compression ──────────────────────────────────────────────────────────
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# ── Bot Shield (assigns X-Request-ID) ─────────────────────────────────────────
-if settings.bot_shield_enabled:
-    app.add_middleware(BotShieldMiddleware)
-
-# ── Security Headers ──────────────────────────────────────────────────────────
-app.add_middleware(SecurityHeadersMiddleware)
-
-# ── Trusted Hosts ──────────────────────────────────────────────────────────────
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
-
-# ── Rate Limiting & Custom Exception Handler (attaches CORS to 429 responses) ──
+# 2. Rate Limiting
 def _cors_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     resp = _rate_limit_exceeded_handler(request, exc)
     origin = request.headers.get("origin", "*")
@@ -184,8 +158,40 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _cors_rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# ── Audit Logger ──────────────────────────────────────────────────────────────
-app.add_middleware(AuditLoggerMiddleware)
+# 3. Trusted Host
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+
+# 4. Security Headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 5. Bot Shield
+if settings.bot_shield_enabled:
+    app.add_middleware(BotShieldMiddleware)
+
+# 6. GZip Compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# 7. CORS (ADDED LAST -> OUTERMOST -> Intercepts preflight OPTIONS & attaches CORS headers to EVERY response!)
+_frontend_clean = settings.frontend_origin.rstrip("/") if settings.frontend_origin else ""
+_extra_origins: list[str] = [
+    "https://denno-os.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5173",
+]
+_origins = [_frontend_clean, *_extra_origins] if _frontend_clean else _extra_origins
+_allow_regex = r"https://.*\.vercel\.app|https://.*\.onrender\.com|http://(localhost|127\.0\.0\.1)(:\d+)?"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(dict.fromkeys(filter(None, _origins))),
+    allow_origin_regex=_allow_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 from app.api.metrics import router as metrics_router
 
