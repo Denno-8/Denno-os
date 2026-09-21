@@ -316,21 +316,32 @@ class AuthService:
             )
         )
 
-        email_sent = False
+        email_sent = True
         send_error: str | None = None
         try:
+            import asyncio
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
-            await send_password_reset(user.email, token, first_name)
-            email_sent = True
-            logger.info("Password reset email sent successfully for user_id=%s", user.id)
+
+            async def _bg_send_reset():
+                try:
+                    await asyncio.wait_for(
+                        send_password_reset(user.email, token, first_name),
+                        timeout=10.0
+                    )
+                    logger.info("Password reset email delivered for user_id=%s", user.id)
+                except Exception as _mail_exc:
+                    logger.error(
+                        "Password reset email delivery failed for user_id=%s | error=%s",
+                        user.id,
+                        _mail_exc,
+                    )
+
+            asyncio.create_task(_bg_send_reset())
+            logger.info("Password reset email task dispatched for user_id=%s", user.id)
         except Exception as exc:
             send_error = str(exc)
-            logger.error(
-                "Failed to send password reset email for user_id=%s | error=%s",
-                user.id,
-                exc,
-            )
+            logger.error("Failed to dispatch password reset email task for user_id=%s | error=%s", user.id, exc)
 
         response: dict = {
             "message": "If that email exists, a reset link has been sent to your inbox.",
