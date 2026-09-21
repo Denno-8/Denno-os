@@ -323,6 +323,10 @@ class AuthService:
         response: dict = {
             "message": "If that email exists, a reset link has been sent to your inbox.",
             "email_sent": email_sent,
+            "reset_token": None,
+            "reset_link": None,
+            "smtp_warning": None,
+            "smtp_error": None,
         }
 
         # In development (non-production), expose the token and link for easy testing.
@@ -338,6 +342,10 @@ class AuthService:
                 )
             elif send_error:
                 response["smtp_error"] = send_error
+        elif send_error:
+            # In production, don't reveal the token but do expose the SMTP error
+            # so operators can diagnose delivery failures without checking server logs.
+            response["smtp_error"] = send_error
 
         return response
 
