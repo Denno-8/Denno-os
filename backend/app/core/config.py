@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     smtp_tls: bool = Field(default=True, alias="SMTP_TLS")
     # HTTP Email Provider Keys (Bypasses Render outbound SMTP port blocking over HTTPS port 443)
     resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    # Resend sender address — must be from a domain verified in https://resend.com/domains
+    # OR use "onboarding@resend.dev" (Resend's built-in test address, works without domain verification)
+    resend_from_email: str = Field(default="onboarding@resend.dev", alias="RESEND_FROM_EMAIL")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
     sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
 

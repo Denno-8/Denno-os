@@ -343,7 +343,11 @@ async def smtp_diagnostic():
     from app.core.config import settings
 
     # Compute the actual Resend from-address (mirrors email_sender.py logic)
-    resend_from_email = (settings.smtp_from_email or settings.smtp_user or "noreply@denno.app").strip()
+    resend_from_email = (
+        settings.resend_from_email
+        or settings.smtp_from_email
+        or "onboarding@resend.dev"
+    ).strip()
 
     config = {
         "emails_enabled": settings.emails_enabled,
