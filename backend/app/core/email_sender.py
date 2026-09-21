@@ -98,10 +98,16 @@ async def _send(
     if settings.brevo_api_key:
         try:
             import urllib.request, json
+            brevo_from = (
+                settings.brevo_from_email
+                or settings.smtp_from_email
+                or settings.smtp_user
+                or sender_email
+            ).strip()
             req = urllib.request.Request(
                 "https://api.brevo.com/v3/smtp/email",
                 data=json.dumps({
-                    "sender": {"name": sender_name, "email": sender_email},
+                    "sender": {"name": sender_name, "email": brevo_from},
                     "to": [{"email": to_email}],
                     "subject": subject,
                     "htmlContent": html_body,
@@ -115,8 +121,17 @@ async def _send(
             )
             with urllib.request.urlopen(req, timeout=12) as resp:
                 if resp.status in (200, 201, 202):
-                    logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s", to_email, subject)
+                    logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s | from=%s", to_email, subject, brevo_from)
                     return
+        except urllib.request.HTTPError as brevo_http_err:
+            try:
+                err_body = brevo_http_err.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = "<unreadable>"
+            logger.warning(
+                "[EmailSender] Brevo HTTP API send failed (HTTP %s: %s) | from=%s | body=%s. Falling back to SMTP...",
+                brevo_http_err.code, brevo_http_err.reason, brevo_from, err_body
+            )
         except Exception as brevo_err:
             logger.warning("[EmailSender] Brevo HTTP API send failed (%s). Falling back...", brevo_err)
 

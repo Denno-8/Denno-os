@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # OR use "onboarding@resend.dev" (Resend's built-in test address, works without domain verification)
     resend_from_email: str = Field(default="onboarding@resend.dev", alias="RESEND_FROM_EMAIL")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
+    brevo_from_email: str = Field(default="", alias="BREVO_FROM_EMAIL")
     sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
 
     # CORS & Frontend
