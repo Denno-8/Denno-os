@@ -195,6 +195,7 @@ async def init_db():
                    ADD COLUMN IF NOT EXISTS first_name character varying(100) DEFAULT '',
                    ADD COLUMN IF NOT EXISTS last_name character varying(100) DEFAULT '',
                    ADD COLUMN IF NOT EXISTS phone character varying(20) DEFAULT '',
+                   ADD COLUMN IF NOT EXISTS location character varying(255) DEFAULT '',
                    ADD COLUMN IF NOT EXISTS title character varying(255) DEFAULT '',
                    ADD COLUMN IF NOT EXISTS years_experience integer DEFAULT 0,
                    ADD COLUMN IF NOT EXISTS linkedin character varying(255) DEFAULT '',
