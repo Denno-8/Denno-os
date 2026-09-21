@@ -576,16 +576,18 @@ class EmailService:
                     import base64 as _b64, json as _json_b, urllib.request as _ureq
                     import asyncio as _aio
 
-                    brevo_from = (
-                        settings.brevo_from_email
-                        or settings.smtp_from_email
-                        or settings.smtp_user
-                        or applicant_email
-                        or recruiter_email
-                    ).strip()
-                    if brevo_from == "noreply@denno.app":
-                        brevo_from = applicant_email or recruiter_email
+                    raw_b_from = (settings.brevo_from_email or "").strip()
+                    if not raw_b_from or raw_b_from in ("noreply@denno.app", "candidate@denno.com"):
+                        if settings.smtp_user and "@" in settings.smtp_user:
+                            raw_b_from = settings.smtp_user.strip()
+                        elif applicant_email and ("@gmail.com" in applicant_email.lower() or "@yahoo.com" in applicant_email.lower() or "@outlook.com" in applicant_email.lower()):
+                            raw_b_from = applicant_email.strip()
+                        elif recruiter_email and ("@gmail.com" in recruiter_email.lower() or "@yahoo.com" in recruiter_email.lower() or "@outlook.com" in recruiter_email.lower()):
+                            raw_b_from = recruiter_email.strip()
+                        else:
+                            raw_b_from = (applicant_email or recruiter_email or "").strip()
 
+                    brevo_from = raw_b_from
                     b_key = settings.brevo_api_key.strip()
 
                     if b_key.startswith("xsmtpsib-"):
