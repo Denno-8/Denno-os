@@ -26,8 +26,19 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     fixes = [
-        # Drop the NOT NULL constraint on user_id (makes it nullable)
-        "ALTER TABLE job_sources ALTER COLUMN user_id DROP NOT NULL",
+        # Safely drop NOT NULL from user_id only if the constraint exists
+        # (fresh deployments via create_all won't have this constraint)
+        """DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'job_sources'
+                  AND column_name = 'user_id'
+                  AND is_nullable = 'NO'
+            ) THEN
+                ALTER TABLE job_sources ALTER COLUMN user_id DROP NOT NULL;
+            END IF;
+        END $$""",
         # Add any missing columns that the ORM model expects
         "ALTER TABLE job_sources ADD COLUMN IF NOT EXISTS description text DEFAULT ''",
         "ALTER TABLE job_sources ADD COLUMN IF NOT EXISTS scrape_method character varying(100) DEFAULT 'manual'",
