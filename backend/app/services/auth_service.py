@@ -159,9 +159,16 @@ class AuthService:
         try:
             import asyncio
             from app.core.email_sender import send_welcome
-            asyncio.create_task(
-                send_welcome(user_email, payload.first_name or "")
-            )
+
+            async def _send_welcome():
+                try:
+                    await send_welcome(user_email, payload.first_name or "")
+                except Exception as _e:
+                    logger.debug("Welcome email delivery failed: %s", _e)
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.ensure_future(_send_welcome())
         except Exception as _welcome_err:
             logger.debug("Welcome email skipped: %s", _welcome_err)
 
@@ -303,16 +310,33 @@ class AuthService:
             and settings.smtp_host
         )
 
-        email_sent = True
+        email_sent = False
         send_error: str | None = None
         try:
             import asyncio
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
-            asyncio.create_task(
-                send_password_reset(user.email, token, first_name)
-            )
-            logger.info("Password reset email task dispatched for user_id=%s", user.id)
+
+            async def _fire_and_forget():
+                try:
+                    await send_password_reset(user.email, token, first_name)
+                except Exception as _mail_exc:
+                    logger.error(
+                        "Password reset email delivery failed for user_id=%s | error=%s",
+                        user.id,
+                        _mail_exc,
+                    )
+
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.ensure_future(_fire_and_forget())
+                email_sent = True
+                logger.info("Password reset email task dispatched for user_id=%s", user.id)
+            else:
+                logger.warning(
+                    "No running event loop — password reset email skipped for user_id=%s",
+                    user.id,
+                )
         except Exception as exc:
             send_error = str(exc)
             logger.error(
