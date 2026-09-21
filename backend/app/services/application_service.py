@@ -149,52 +149,50 @@ class ApplicationService:
         except Exception:
             pass
 
-        email_result = None
+        email_sent = False
+        smtp_error = None
         if is_email_dispatch:
-            import asyncio
             curr_cv_snap = cv_snapshot or getattr(target_app, "cv_snapshot", None)
             curr_app_snap = getattr(target_app, "app_letter_snapshot", None)
             curr_notes = doc.get("notes") or getattr(target_app, "notes", "") or ""
 
-            async def _bg_dispatch():
-                from app.database.postgresql import AsyncSessionLocal
+            try:
                 from app.services.email_service import EmailService
                 from app.services.notification_service import NotificationService
                 from app.schemas.notification import NotificationCreate
-                from app.core.security_sanitizer import sanitize_exception_message
 
-                async with AsyncSessionLocal() as bg_session:
-                    try:
-                        email_svc = EmailService(bg_session)
-                        res = await email_svc.send_application_email(
-                            user_id=user_id,
-                            recruiter_email=rec_email,
-                            company_name=target_app.company_name,
-                            role_title=target_app.role,
-                            cover_letter=curr_notes,
-                            cv_snapshot=curr_cv_snap,
-                            app_letter_snapshot=curr_app_snap,
-                            app_letter_text=app_letter_text or curr_notes,
-                            application_id=target_app.id,
-                            applicant_info=applicant_info,
-                        )
-                        notif_svc = NotificationService(bg_session)
-                        if res and res.get("email_sent"):
-                            n_title = "Email Application Dispatched! 📧"
-                            n_msg = f"Dispatched official application for {target_app.role} at {target_app.company_name} to recruiter with attached PDF resume & cover letter!"
-                        else:
-                            n_title = "Application Logged 📧"
-                            err = res.get('smtp_error') if res else 'Outbound log created.'
-                            n_msg = f"Application for {target_app.role} at {target_app.company_name} was saved to outbox: {err}"
+                email_svc = EmailService(self.repo.session)
+                dispatch_res = await email_svc.send_application_email(
+                    user_id=user_id,
+                    recruiter_email=rec_email,
+                    company_name=target_app.company_name,
+                    role_title=target_app.role,
+                    cover_letter=curr_notes,
+                    cv_snapshot=curr_cv_snap,
+                    app_letter_snapshot=curr_app_snap,
+                    app_letter_text=app_letter_text or curr_notes,
+                    application_id=target_app.id,
+                    applicant_info=applicant_info,
+                )
+                if dispatch_res and dispatch_res.get("sent"):
+                    email_sent = True
+                else:
+                    smtp_error = dispatch_res.get("smtp_warning") if dispatch_res else "Failed to send email"
 
-                        await notif_svc.create(user_id, NotificationCreate(
-                            title=n_title, message=n_msg, type="application", link="/applications"
-                        ))
-                        await bg_session.commit()
-                    except Exception as bg_exc:
-                        print(f"[ApplicationService] Background email dispatch error: {bg_exc}")
+                notif_svc = NotificationService(self.repo.session)
+                if email_sent:
+                    n_title = "Email Application Dispatched! 📧"
+                    n_msg = f"Dispatched official application for {target_app.role} at {target_app.company_name} to {rec_email} with attached PDF resume & cover letter!"
+                else:
+                    n_title = "Application Logged 📧"
+                    n_msg = f"Application for {target_app.role} at {target_app.company_name} was saved: {smtp_error or 'Outbound log created.'}"
 
-            asyncio.create_task(_bg_dispatch())
+                await notif_svc.create(user_id, NotificationCreate(
+                    title=n_title, message=n_msg, type="application", link="/applications"
+                ))
+            except Exception as dispatch_exc:
+                smtp_error = str(dispatch_exc)
+                print(f"[ApplicationService] Email dispatch error: {dispatch_exc}")
         else:
             try:
                 from app.services.notification_service import NotificationService
@@ -210,7 +208,9 @@ class ApplicationService:
                 pass
 
         res = _serialize(target_app)
-        res["email_sent"] = True if is_email_dispatch else False
+        res["email_sent"] = email_sent if is_email_dispatch else False
+        if smtp_error:
+            res["smtp_error"] = smtp_error
         return res
 
     async def get(self, app_id: int, user_id: int) -> dict | None:
