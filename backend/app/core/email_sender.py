@@ -98,42 +98,36 @@ async def _send(
     if settings.brevo_api_key:
         try:
             import urllib.request, json
-            # Check if brevo_from_email is set, or fallback to smtp_user. Avoid placeholder "noreply@denno.app"
             raw_brevo_from = (settings.brevo_from_email or "").strip()
-            if not raw_brevo_from:
-                # If smtp_from_email is not the default placeholder, use it; otherwise fallback to smtp_user
+            if not raw_brevo_from or raw_brevo_from == "noreply@denno.app":
                 if settings.smtp_from_email and settings.smtp_from_email.strip() != "noreply@denno.app":
                     raw_brevo_from = settings.smtp_from_email.strip()
                 elif settings.smtp_user:
                     raw_brevo_from = settings.smtp_user.strip()
+                else:
+                    # Fall back to recipient email (works great when sending resets to your own Brevo signup address)
+                    raw_brevo_from = to_email
 
-            if not raw_brevo_from or raw_brevo_from == "noreply@denno.app":
-                logger.warning(
-                    "[EmailSender] Brevo send skipped: BREVO_FROM_EMAIL is missing or set to placeholder 'noreply@denno.app'. "
-                    "Brevo requires a valid sender email (e.g. your Brevo signup email address). "
-                    "Set BREVO_FROM_EMAIL=your_email@domain.com in Render environment variables."
-                )
-            else:
-                brevo_from = raw_brevo_from
-                req = urllib.request.Request(
-                    "https://api.brevo.com/v3/smtp/email",
-                    data=json.dumps({
-                        "sender": {"name": sender_name, "email": brevo_from},
-                        "to": [{"email": to_email}],
-                        "subject": subject,
-                        "htmlContent": html_body,
-                    }).encode("utf-8"),
-                    headers={
-                        "api-key": settings.brevo_api_key.strip(),
-                        "Content-Type": "application/json",
-                        "User-Agent": "DennoCareerOS/1.0",
-                    },
-                    method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=12) as resp:
-                    if resp.status in (200, 201, 202):
-                        logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s | from=%s", to_email, subject, brevo_from)
-                        return
+            brevo_from = raw_brevo_from
+            req = urllib.request.Request(
+                "https://api.brevo.com/v3/smtp/email",
+                data=json.dumps({
+                    "sender": {"name": sender_name, "email": brevo_from},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "htmlContent": html_body,
+                }).encode("utf-8"),
+                headers={
+                    "api-key": settings.brevo_api_key.strip(),
+                    "Content-Type": "application/json",
+                    "User-Agent": "DennoCareerOS/1.0",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                if resp.status in (200, 201, 202):
+                    logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s | from=%s", to_email, subject, brevo_from)
+                    return
         except urllib.request.HTTPError as brevo_http_err:
             try:
                 err_body = brevo_http_err.read().decode("utf-8", errors="replace")
