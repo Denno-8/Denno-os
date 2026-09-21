@@ -402,7 +402,12 @@ class EmailService:
                 applicant_location = applicant_location or getattr(current_user, "location", "")
 
         applicant_name = applicant_name or "Job Candidate"
-        applicant_email = applicant_email or settings.smtp_from_email or "candidate@denno.com"
+        # Resolve a real sender email — never fall back to unverified placeholder domains
+        _placeholder_domains = ("denno.app", "denno.com", "denno.os", "example.com")
+        _candidate_raw = applicant_email or settings.smtp_from_email or settings.smtp_user or ""
+        if not _candidate_raw or any(_candidate_raw.endswith("@" + d) for d in _placeholder_domains):
+            _candidate_raw = settings.smtp_user or ""
+        applicant_email = _candidate_raw or ""
         applicant_phone = applicant_phone or ""
         applicant_location = applicant_location or "Nairobi, Kenya"
 
@@ -490,11 +495,13 @@ class EmailService:
         sent_status = False
         smtp_error_msg = None
 
-        sender_email = (
-            settings.smtp_user
-            if (settings.smtp_user and ("gmail" in settings.smtp_user or settings.smtp_from_email in ("", "noreply@denno.app")))
-            else (settings.smtp_from_email or settings.smtp_user or "candidate@denno.app")
-        )
+        # Resolve sender — prefer smtp_user (the verified account), never use placeholder domains
+        _placeholder_domains_s = ("denno.app", "denno.com", "denno.os", "example.com")
+        _from_email_raw = settings.smtp_from_email or ""
+        if not _from_email_raw or any(_from_email_raw.endswith("@" + d) for d in _placeholder_domains_s):
+            sender_email = (settings.smtp_user or applicant_email or "").strip()
+        else:
+            sender_email = (_from_email_raw if not (settings.smtp_user and "gmail" in settings.smtp_user) else settings.smtp_user).strip()
         sender_name = applicant_name or settings.smtp_from_name or "Job Candidate"
 
         rec_domain = recruiter_email.split("@")[-1].strip() if (recruiter_email and "@" in str(recruiter_email)) else ""
@@ -623,11 +630,14 @@ class EmailService:
                                 att.add_header("Content-Disposition", "attachment", filename=f"Resume_{clean_applicant_filename}.pdf")
                                 msg.attach(att)
 
+                            # Brevo SMTP login username = your Brevo account email (smtp_user)
+                            # NOT the applicant's email — Brevo only accepts its own registered accounts
+                            _brevo_smtp_user = (settings.smtp_user or brevo_from).strip()
                             with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=12) as s:
                                 s.ehlo()
                                 s.starttls()
                                 s.ehlo()
-                                s.login(brevo_from, b_key)
+                                s.login(_brevo_smtp_user, b_key)
                                 s.sendmail(brevo_from, [recruiter_email], msg.as_string())
 
                         await _aio.to_thread(_do_brevo_smtp)
