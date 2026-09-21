@@ -72,6 +72,7 @@ class User(Base):
     certifications = Column(ArrayType, default=[])
 
     notifications = Column(JSON, default={"jobs": True, "deadlines": True, "interviews": True, "emails": True, "learning": True, "weekly_report": True})
+    ai_preferences = Column(JSON, default={"tone": "professional", "model": "Claude 3.5 Sonnet", "auto_analyze": True, "ats_threshold": 80})
     theme = Column(String(20), default="light")
     two_fa_enabled = Column(Boolean, default=False)
     profile_public = Column(Boolean, default=False)

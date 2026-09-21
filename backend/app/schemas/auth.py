@@ -84,7 +84,9 @@ class UserOut(BaseModel):
     salary_max: int = 0
     currency: str = "KES"
     skills: list[str] = []
+    open_to: list[str] = []
     notifications: dict = {}
+    ai_preferences: dict = {}
     theme: str = "light"
     two_fa_enabled: bool = False
     profile_public: bool = False
@@ -110,10 +112,13 @@ class UserProfileUpdate(BaseModel):
     salary_max: Annotated[int | None, Field(default=None, ge=0)] = None
     currency: Annotated[str | None, Field(default=None, max_length=10)] = None
     skills: list[str] | None = None
+    open_to: list[str] | None = None
     notifications: dict | None = None
+    ai_preferences: dict | None = None
     theme: Annotated[str | None, Field(default=None, max_length=20)] = None
     two_fa_enabled: bool | None = None
     profile_public: bool | None = None
+
 
 
 class ChangePasswordRequest(BaseModel):

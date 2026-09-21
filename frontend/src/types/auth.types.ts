@@ -24,9 +24,17 @@ export interface CurrentUser {
   salary_max?: number;
   currency?: string;
   skills?: string[];
+  open_to?: string[];
   notifications?: Record<string, boolean>;
+  ai_preferences?: {
+    tone?: string;
+    model?: string;
+    auto_analyze?: boolean;
+    ats_threshold?: number;
+  };
   theme?: string;
   two_fa_enabled?: boolean;
   profile_public?: boolean;
   role: string;
 }
+

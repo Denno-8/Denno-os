@@ -50,12 +50,15 @@ def _serialize_user(user) -> UserOut:
         salary_max=user.salary_max or 0,
         currency=user.currency or "KES",
         skills=user.skills or [],
+        open_to=getattr(user, "open_to", None) or [],
         notifications=user.notifications or {},
+        ai_preferences=getattr(user, "ai_preferences", None) or {},
         theme=user.theme or "light",
         two_fa_enabled=getattr(user, "two_fa_enabled", False),
         profile_public=getattr(user, "profile_public", False),
         role=role,
     )
+
 
 
 class AuthService:

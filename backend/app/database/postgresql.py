@@ -106,7 +106,8 @@ async def init_db():
                    ADD COLUMN IF NOT EXISTS jobs_found integer DEFAULT 0,
                    ADD COLUMN IF NOT EXISTS last_checked_at timestamp with time zone DEFAULT now(),
                    ADD COLUMN IF NOT EXISTS description text DEFAULT '',
-                   ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+                   ADD COLUMN IF NOT EXISTS ai_preferences jsonb DEFAULT '{"tone":"professional","model":"Claude 3.5 Sonnet","auto_analyze":true,"ats_threshold":80}',
+                    ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
                    ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()""",
 
                 """ALTER TABLE IF EXISTS cv_versions

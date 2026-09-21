@@ -103,8 +103,15 @@ export default function SettingsPage() {
             career_goal: user.career_goal || ""
           });
           if (Array.isArray(user.skills)) setSkills(user.skills);
+          if (Array.isArray(user.open_to)) setOpenTo(user.open_to);
           if (user.notifications) {
             setNotifications((prev) => ({ ...prev, ...user.notifications }));
+          }
+          if (user.ai_preferences) {
+            if (user.ai_preferences.tone) setAiTone(user.ai_preferences.tone);
+            if (user.ai_preferences.model) setAiModel(user.ai_preferences.model);
+            if (typeof user.ai_preferences.auto_analyze === "boolean") setAiAutoAnalyze(user.ai_preferences.auto_analyze);
+            if (typeof user.ai_preferences.ats_threshold === "number") setAtsThreshold(user.ai_preferences.ats_threshold);
           }
           if (typeof user.two_fa_enabled === "boolean") setTwoFactor(user.two_fa_enabled);
           if (typeof user.profile_public === "boolean") setProfilePublic(user.profile_public);
@@ -143,12 +150,27 @@ export default function SettingsPage() {
   };
 
   const handleSaveAIPreferences = async () => {
-    localStorage.setItem("denno_ai_tone", aiTone);
-    localStorage.setItem("denno_ai_model", aiModel);
-    localStorage.setItem("denno_ai_auto_analyze", String(aiAutoAnalyze));
-    localStorage.setItem("denno_ats_threshold", String(atsThreshold));
-    showSuccess("AI Assistant preferences saved successfully!");
+    try {
+      setIsSaving(true);
+      const ai_preferences = {
+        tone: aiTone,
+        model: aiModel,
+        auto_analyze: aiAutoAnalyze,
+        ats_threshold: atsThreshold,
+      };
+      await authService.updateProfile({ ai_preferences } as any);
+      localStorage.setItem("denno_ai_tone", aiTone);
+      localStorage.setItem("denno_ai_model", aiModel);
+      localStorage.setItem("denno_ai_auto_analyze", String(aiAutoAnalyze));
+      localStorage.setItem("denno_ats_threshold", String(atsThreshold));
+      showSuccess("AI Assistant preferences saved to database!");
+    } catch (err: any) {
+      showError(err?.message || "Failed to save AI preferences.");
+    } finally {
+      setIsSaving(false);
+    }
   };
+
 
   const handleSaveNotifications = async () => {
     try {
@@ -608,7 +630,12 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div
-                  onClick={() => theme !== "light" && toggleTheme()}
+                  onClick={() => {
+                    if (theme !== "light") {
+                      toggleTheme();
+                      authService.updateProfile({ theme: "light" } as any).catch(() => {});
+                    }
+                  }}
                   className={`cursor-pointer border p-5 rounded-2xl flex items-center justify-between transition-all ${
                     theme === "light"
                       ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100 font-bold ring-2 ring-blue-500/20"
@@ -628,13 +655,19 @@ export default function SettingsPage() {
                 </div>
 
                 <div
-                  onClick={() => theme !== "dark" && toggleTheme()}
+                  onClick={() => {
+                    if (theme !== "dark") {
+                      toggleTheme();
+                      authService.updateProfile({ theme: "dark" } as any).catch(() => {});
+                    }
+                  }}
                   className={`cursor-pointer border p-5 rounded-2xl flex items-center justify-between transition-all ${
                     theme === "dark"
                       ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100 font-bold ring-2 ring-blue-500/20"
                       : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                   }`}
                 >
+
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-slate-800 text-blue-400 flex items-center justify-center">
                       <Moon size={22} />
