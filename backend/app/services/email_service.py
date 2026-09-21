@@ -486,7 +486,7 @@ class EmailService:
 </body>
 </html>"""
 
-        # ── 5. Robust Multi-Port IPv4 SMTP & IMAP Dispatch ──
+        # ── 5. Dispatch: Resend (primary, bypasses Render port blocking) → SMTP fallback ──
         sent_status = False
         smtp_error_msg = None
 
@@ -497,10 +497,6 @@ class EmailService:
         )
         sender_name = applicant_name or settings.smtp_from_name or "Job Candidate"
 
-        # ── 5. Robust Multi-Port IPv4 SMTP & IMAP Dispatch ──
-        sent_status = False
-        smtp_error_msg = None
-
         rec_domain = recruiter_email.split("@")[-1].strip() if (recruiter_email and "@" in str(recruiter_email)) else ""
         has_smtp_creds = bool(settings.smtp_user and settings.smtp_password)
 
@@ -510,9 +506,71 @@ class EmailService:
             smtp_error_msg = f"Recruiter email '{recruiter_email}' is a test domain placeholder. Logged to outbox."
         elif not recruiter_email:
             smtp_error_msg = "Recruiter email is missing."
-        elif not has_smtp_creds:
-            smtp_error_msg = "SMTP credentials missing: Please add SMTP_USER and SMTP_PASSWORD in environment settings."
         else:
+            # ── 5a. Resend HTTP API (primary — works on Render free tier, no SMTP port needed) ──
+            # FROM  : onboarding@resend.dev  (or RESEND_FROM_EMAIL if set)
+            # REPLY-TO: applicant's real Gmail  → employer clicks Reply → goes directly to you
+            if settings.resend_api_key:
+                try:
+                    import base64 as _b64, json as _json_r, urllib.request as _ureq
+                    import asyncio as _aio
+
+                    _resend_from = (settings.resend_from_email or "onboarding@resend.dev").strip()
+
+                    # Build base64-encoded PDF attachments for Resend
+                    _attachments_r: list = []
+                    if app_letter_pdf_bytes:
+                        _attachments_r.append({
+                            "filename": f"Application_Letter_{clean_applicant_filename}.pdf",
+                            "content": _b64.b64encode(app_letter_pdf_bytes).decode("utf-8"),
+                        })
+                    if cover_pdf_bytes:
+                        _attachments_r.append({
+                            "filename": f"Cover_Letter_{clean_applicant_filename}.pdf",
+                            "content": _b64.b64encode(cover_pdf_bytes).decode("utf-8"),
+                        })
+                    if cv_pdf_bytes:
+                        _attachments_r.append({
+                            "filename": f"Resume_{clean_applicant_filename}.pdf",
+                            "content": _b64.b64encode(cv_pdf_bytes).decode("utf-8"),
+                        })
+
+                    _resend_payload: dict = {
+                        "from": f"{sender_name} <{_resend_from}>",
+                        "to": [recruiter_email],
+                        "reply_to": [applicant_email],  # ← Employer clicks Reply → your real Gmail
+                        "subject": subject,
+                        "html": html_body,
+                        "text": plain_body,
+                    }
+                    if _attachments_r:
+                        _resend_payload["attachments"] = _attachments_r
+
+                    def _do_resend():
+                        _req = _ureq.Request(
+                            "https://api.resend.com/emails",
+                            data=_json_r.dumps(_resend_payload).encode("utf-8"),
+                            headers={
+                                "Authorization": f"Bearer {settings.resend_api_key.strip()}",
+                                "Content-Type": "application/json",
+                                "User-Agent": "DennoCareerOS/1.0",
+                            },
+                            method="POST",
+                        )
+                        with _ureq.urlopen(_req, timeout=30) as _r:
+                            return _r.status
+
+                    _rs_code = await _aio.to_thread(_do_resend)
+                    if _rs_code in (200, 201, 202):
+                        sent_status = True
+                        print(
+                            f"[EmailService] ✓ Application sent via Resend "
+                            f"to={recruiter_email} | reply_to={applicant_email} | from={_resend_from}"
+                        )
+                except Exception as _resend_err:
+                    print(f"[EmailService] Resend application send failed ({_resend_err}). Trying SMTP fallback...")
+
+            # ── 5b. SMTP fallback (Gmail direct — may be blocked on Render free tier) ──
             def _do_send_smtp(target_rec_email: str, target_rec_domain: str):
                 if target_rec_domain:
                     try:
@@ -658,14 +716,18 @@ class EmailService:
                 except Exception as imap_err:
                     print(f"IMAP Sent append note: {imap_err}")
 
-            try:
-                import asyncio
-                await asyncio.to_thread(_do_send_smtp, recruiter_email, rec_domain)
-                sent_status = True
-            except Exception as exc:
-                from app.core.security_sanitizer import sanitize_exception_message
-                smtp_error_msg = sanitize_exception_message(exc, default_fallback="Application saved to Sent box outbox.")
-                print(f"SMTP dispatch note: {exc}")
+            if not sent_status:
+                if not has_smtp_creds:
+                    smtp_error_msg = "No email provider available: Add RESEND_API_KEY (recommended) or SMTP_USER + SMTP_PASSWORD."
+                else:
+                    try:
+                        import asyncio
+                        await asyncio.to_thread(_do_send_smtp, recruiter_email, rec_domain)
+                        sent_status = True
+                    except Exception as exc:
+                        from app.core.security_sanitizer import sanitize_exception_message
+                        smtp_error_msg = sanitize_exception_message(exc, default_fallback="Application saved to Sent box outbox.")
+                        print(f"SMTP dispatch note: {exc}")
 
         # ── 6. Record outgoing application email record in DB ──
         doc = {
