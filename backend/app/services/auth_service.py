@@ -292,6 +292,10 @@ class AuthService:
     async def request_password_reset(self, email: str) -> dict:
         user = await self.repo.get_by_email(email)
         if not user:
+            logger.warning(
+                "[PasswordReset] Reset requested for email='%s', but NO USER account exists in the database with that email.",
+                email,
+            )
             # Always return silently — prevents email enumeration
             return {
                 "message": "If that email exists, a reset link has been sent to your inbox.",
