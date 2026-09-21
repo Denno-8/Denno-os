@@ -19,12 +19,14 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_token_payload(
+    request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:
-    if creds is None:
+    raw_token = (creds.credentials if creds else None) or request.query_params.get("token")
+    if not raw_token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     try:
-        payload = jwt.decode(creds.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(raw_token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
 

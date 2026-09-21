@@ -11,9 +11,9 @@ class NotificationCreate(BaseModel):
 
 class NotificationOut(BaseModel):
     id: str
-    title: str
-    message: str
-    type: str
-    link: str
-    read: bool
-    created_at: datetime
+    title: str = ""
+    message: str = ""
+    type: str = "info"
+    link: str = ""
+    read: bool = False
+    created_at: datetime | str | None = None
