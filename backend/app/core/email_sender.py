@@ -83,11 +83,14 @@ async def _send(
                 err_body = resend_http_err.read().decode("utf-8", errors="replace")
             except Exception:
                 err_body = "<unreadable>"
+            
+            hint = ""
+            if "Invalid `to` field" in err_body or "domains like `example.com`" in err_body:
+                hint = " (Note: onboarding@resend.dev can ONLY send to your Resend signup email address. To send to any address, verify a custom domain at https://resend.com/domains)."
+
             logger.warning(
-                "[EmailSender] Resend send failed (HTTP %s: %s) | from=%s | body=%s. "
-                "If using a Sending-Only key, set RESEND_FROM_EMAIL to a verified domain address "
-                "(https://resend.com/domains). Falling back to SMTP...",
-                resend_http_err.code, resend_http_err.reason, resend_from_email, err_body,
+                "[EmailSender] Resend send failed (HTTP %s: %s) | from=%s | body=%s%s Falling back to SMTP...",
+                resend_http_err.code, resend_http_err.reason, resend_from_email, err_body, hint,
             )
         except Exception as resend_err:
             logger.warning("[EmailSender] Resend send failed (%s). Falling back to SMTP...", resend_err)
