@@ -183,7 +183,15 @@ export default function LoginPage() {
         if (r.reset_link) setResetLink(r.reset_link);
         if (r.smtp_error && !r.email_sent) setError(`SMTP Error: ${r.smtp_error}`);
       }
-      else if (mode === "reset") { const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login"); }
+      else if (mode === "reset") {
+        // Client-side pre-flight: prevents the 422 from the backend validator
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+          setError("Password must be 8+ characters with at least one uppercase letter, one digit, and one special character (!@#$...).");
+          setLoading(false);
+          return;
+        }
+        const r = await authService.resetPassword(resetToken, newPassword); setInfo(r.message); switchMode("login");
+      }
     } catch (e) { handleApiError(e, "Something went wrong. Check your details."); }
     finally { setLoading(false); }
   };
@@ -508,11 +516,12 @@ export default function LoginPage() {
                 </div>
                 <div style={{ position:"relative" }}>
                   <Lock size={16} style={iconStyle} />
-                  <input id="input-new-password" type={showNewPw?"text":"password"} placeholder="New password (min 8 chars)" value={newPassword} onChange={e=>setNewPassword(e.target.value)} onKeyDown={handleKey} autoComplete="new-password" style={inputStyle({paddingRight:"40px"})} />
+                  <input id="input-new-password" type={showNewPw?"text":"password"} placeholder="New password (e.g. MyPass1!)" value={newPassword} onChange={e=>setNewPassword(e.target.value)} onKeyDown={handleKey} autoComplete="new-password" style={inputStyle({paddingRight:"40px"})} />
                   <button type="button" tabIndex={-1} onClick={()=>setShowNewPw(!showNewPw)} style={{ position:"absolute", right:"12px", top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color: dark ? "#94a3b8" : "#475569", display:"flex" }}>
                     <EyeIcon open={showNewPw} />
                   </button>
                 </div>
+                <PasswordStrength password={newPassword} />
               </>
             )}
 

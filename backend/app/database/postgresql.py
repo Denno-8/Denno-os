@@ -235,7 +235,36 @@ async def init_db():
                 """ALTER TABLE IF EXISTS applications
                    ADD COLUMN IF NOT EXISTS cv_snapshot jsonb,
                    ADD COLUMN IF NOT EXISTS app_letter_snapshot jsonb,
-                   ADD COLUMN IF NOT EXISTS apply_method character varying(50) DEFAULT 'website'"""
+                   ADD COLUMN IF NOT EXISTS apply_method character varying(50) DEFAULT 'website'""",
+
+                 # Fix notifications table: migration 0001 created id as VARCHAR(50)
+                 # and omitted the link column. All notification reads/writes fail with
+                 # the wrong schema so the table is effectively empty - safe to recreate.
+                 """DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'notifications'
+          AND column_name = 'id'
+          AND data_type IN ('character varying', 'character', 'text')
+    ) THEN
+        DROP TABLE IF EXISTS notifications CASCADE;
+        CREATE TABLE notifications (
+            id      SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title   VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            type    VARCHAR(50) DEFAULT 'info',
+            link    VARCHAR(255) DEFAULT '',
+            read    BOOLEAN DEFAULT false,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ix_notifications_user_read ON notifications(user_id, read);
+    ELSE
+        ALTER TABLE IF EXISTS notifications
+            ADD COLUMN IF NOT EXISTS link VARCHAR(255) DEFAULT '';
+    END IF;
+END $$"""
             ]
 
             async with engine.begin() as conn:
