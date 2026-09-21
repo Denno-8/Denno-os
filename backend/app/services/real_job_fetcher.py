@@ -152,7 +152,7 @@ class RealJobFetcher:
             conditions.append(Job.source_url == source_url.strip())
 
         result = await self.db.execute(select(Job).where(or_(*conditions)))
-        return result.scalar_one_or_none() is not None
+        return result.scalars().first() is not None
 
     async def fetch_remotive_jobs(self, limit: int = 25) -> Dict[str, Any]:
         """Fetch live tech jobs from Remotive API."""

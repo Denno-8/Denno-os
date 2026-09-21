@@ -1,7 +1,5 @@
-import { api, getAccessToken } from "./api";
+import { api, API_URL, getAccessToken } from "./api";
 import type { CVVersion, CVVersionCreateInput, CVVersionUpdateInput } from "../types/cv.types";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 export function generateLocalCompliantCV(payload: {
   job_title: string;

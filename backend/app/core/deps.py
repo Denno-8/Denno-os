@@ -40,7 +40,10 @@ async def get_token_payload(
 
 async def get_current_user_id(payload: dict = Depends(get_token_payload)) -> int:
     """Return current user's ID from token payload."""
-    return int(payload["sub"])
+    try:
+        return int(payload["sub"])
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid user ID in token")
 
 
 async def require_admin(payload: dict = Depends(get_token_payload)) -> int:

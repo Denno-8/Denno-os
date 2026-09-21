@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.notification_repository import NotificationRepository
@@ -5,15 +6,16 @@ from app.schemas.notification import NotificationCreate
 
 
 def _serialize(notif) -> dict:
+    created_at = getattr(notif, "created_at", None) or datetime.now(timezone.utc)
     return {
-        "id": str(notif.id),
-        "user_id": notif.user_id,
-        "title": notif.title,
-        "message": notif.message,
-        "type": notif.type,
-        "link": notif.link or "",
-        "read": notif.read,
-        "created_at": notif.created_at,
+        "id": str(getattr(notif, "id", 0)),
+        "user_id": getattr(notif, "user_id", 0),
+        "title": getattr(notif, "title", "") or "",
+        "message": getattr(notif, "message", "") or "",
+        "type": getattr(notif, "type", "info") or "info",
+        "link": getattr(notif, "link", "") or "",
+        "read": bool(getattr(notif, "read", False)),
+        "created_at": created_at,
     }
 
 

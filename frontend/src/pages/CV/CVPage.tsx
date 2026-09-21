@@ -8,9 +8,7 @@ import CVDiffModal from "../../components/CVDiffModal";
 import CVStyledPreview from "../../components/CVStyledPreview";
 import StructuredCVEditor from "../../components/StructuredCVEditor";
 import { cvService } from "../../services/cv.service";
-import { api, getAccessToken } from "../../services/api";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+import { api, API_URL, getAccessToken } from "../../services/api";
 
 export default function CVPage() {
   const { data: cvs, isLoading, isError, refetch } = useCVVersions();

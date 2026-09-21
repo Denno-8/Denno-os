@@ -21,6 +21,7 @@ import JobChecklistModal from "../../components/JobChecklistModal";
 import CompanyIntelligenceModal from "../../components/CompanyIntelligenceModal";
 import OpenedCareerModal from "../../components/OpenedCareerModal";
 import { jobsService } from "../../services/jobs.service";
+import { API_URL } from "../../services/api";
 import type { Job } from "../../types/job.types";
 
 export default function JobsPage() {
@@ -138,7 +139,7 @@ export default function JobsPage() {
     queryKey: ["jobs", "telemetry"],
     queryFn: async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1"}/jobs/telemetry/status`);
+        const res = await fetch(`${API_URL}/jobs/telemetry/status`);
         if (res.ok) return await res.json();
       } catch {}
       return null;

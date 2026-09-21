@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useCalendarEvents, useCreateEvent, useDeleteEvent } from "../../hooks/useCalendar";
 import { EVENT_TYPES, TYPE_COLORS, type CalendarEvent } from "../../types/calendar.types";
-import { getAccessToken } from "../../services/api";
+import { API_URL, getAccessToken } from "../../services/api";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -75,7 +75,6 @@ export default function CalendarPage() {
   };
 
   const handleExportICS = () => {
-    const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
     const token = getAccessToken();
     window.open(`${API_URL}/calendar/export/ics?month=${month}&year=${year}&token=${token || ""}`, "_blank");
   };

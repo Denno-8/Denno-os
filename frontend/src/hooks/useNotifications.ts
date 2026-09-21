@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notificationsService } from "../services/notifications.service";
+import { API_URL } from "../services/api";
 
 export function useNotifications() {
   const qc = useQueryClient();
@@ -13,8 +14,7 @@ export function useNotifications() {
       sessionStorage.getItem("denno_token");
     if (!token) return;
 
-    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
-    const sseUrl = `${baseUrl}/notifications/stream?token=${encodeURIComponent(token)}`;
+    const sseUrl = `${API_URL}/notifications/stream?token=${encodeURIComponent(token)}`;
     let eventSource: EventSource | null = null;
 
     try {

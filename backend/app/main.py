@@ -213,10 +213,10 @@ async def health(request: Request):
 from fastapi.responses import JSONResponse
 import traceback
 
-# ── Global Exception Handler — Hides raw Python code errors from frontend ──────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     req_id = getattr(request.state, "request_id", "unknown")
+    origin = request.headers.get("origin", "*")
     logger.error(
         "[INTERNAL ERROR 500] Unhandled exception on %s %s (req_id=%s):\n%s",
         request.method, request.url.path, req_id, traceback.format_exc()
@@ -228,6 +228,10 @@ async def global_exception_handler(request: Request, exc: Exception):
             "detail": "An internal server processing error occurred. Please try again later.",
             "status": 500,
             "request_id": req_id,
+        },
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
         },
     )
 

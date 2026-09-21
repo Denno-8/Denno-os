@@ -1,7 +1,5 @@
-import { api, getAccessToken } from "./api";
+import { api, API_URL, getAccessToken } from "./api";
 import type { AdminUser, AdminJob, AdminCompany, PlatformAnalytics, AdminEmailSettings, PaginatedUsers } from "../types/admin.types";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
 
 export const adminService = {
   // Analytics
