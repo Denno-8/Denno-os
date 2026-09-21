@@ -568,9 +568,121 @@ class EmailService:
                             f"to={recruiter_email} | reply_to={applicant_email} | from={_resend_from}"
                         )
                 except Exception as _resend_err:
-                    print(f"[EmailService] Resend application send failed ({_resend_err}). Trying SMTP fallback...")
+                    print(f"[EmailService] Resend application send failed ({_resend_err}). Trying Brevo fallback...")
 
-            # ── 5b. SMTP fallback (Gmail direct — may be blocked on Render free tier) ──
+            # ── 5b. Brevo Provider (HTTP API & SMTP Relay) ──
+            if not sent_status and settings.brevo_api_key:
+                try:
+                    import base64 as _b64, json as _json_b, urllib.request as _ureq
+                    import asyncio as _aio
+
+                    brevo_from = (
+                        settings.brevo_from_email
+                        or settings.smtp_from_email
+                        or settings.smtp_user
+                        or applicant_email
+                        or recruiter_email
+                    ).strip()
+                    if brevo_from == "noreply@denno.app":
+                        brevo_from = applicant_email or recruiter_email
+
+                    b_key = settings.brevo_api_key.strip()
+
+                    if b_key.startswith("xsmtpsib-"):
+                        # Brevo SMTP Relay (xsmtpsib-...)
+                        def _do_brevo_smtp():
+                            import smtplib
+                            from email.mime.multipart import MIMEMultipart
+                            from email.mime.text import MIMEText
+                            from email.mime.application import MIMEApplication
+
+                            msg = MIMEMultipart("mixed")
+                            msg["Subject"] = subject
+                            msg["From"] = f"{sender_name} <{brevo_from}>"
+                            msg["To"] = recruiter_email
+                            if applicant_email and "@" in applicant_email:
+                                msg["Reply-To"] = f"{sender_name} <{applicant_email}>"
+
+                            alt_part = MIMEMultipart("alternative")
+                            alt_part.attach(MIMEText(plain_body, "plain", "utf-8"))
+                            alt_part.attach(MIMEText(html_body, "html", "utf-8"))
+                            msg.attach(alt_part)
+
+                            if app_letter_pdf_bytes:
+                                att = MIMEApplication(app_letter_pdf_bytes, _subtype="pdf")
+                                att.add_header("Content-Disposition", "attachment", filename=f"Application_Letter_{clean_applicant_filename}.pdf")
+                                msg.attach(att)
+                            if cover_pdf_bytes:
+                                att = MIMEApplication(cover_pdf_bytes, _subtype="pdf")
+                                att.add_header("Content-Disposition", "attachment", filename=f"Cover_Letter_{clean_applicant_filename}.pdf")
+                                msg.attach(att)
+                            if cv_pdf_bytes:
+                                att = MIMEApplication(cv_pdf_bytes, _subtype="pdf")
+                                att.add_header("Content-Disposition", "attachment", filename=f"Resume_{clean_applicant_filename}.pdf")
+                                msg.attach(att)
+
+                            with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=12) as s:
+                                s.ehlo()
+                                s.starttls()
+                                s.ehlo()
+                                s.login(brevo_from, b_key)
+                                s.sendmail(brevo_from, [recruiter_email], msg.as_string())
+
+                        await _aio.to_thread(_do_brevo_smtp)
+                        sent_status = True
+                        print(f"[EmailService] ✓ Application sent via Brevo SMTP Relay to={recruiter_email} | from={brevo_from}")
+                    else:
+                        # Brevo HTTP API (xkeysib-...)
+                        _attachments_b = []
+                        if app_letter_pdf_bytes:
+                            _attachments_b.append({
+                                "name": f"Application_Letter_{clean_applicant_filename}.pdf",
+                                "content": _b64.b64encode(app_letter_pdf_bytes).decode("utf-8"),
+                            })
+                        if cover_pdf_bytes:
+                            _attachments_b.append({
+                                "name": f"Cover_Letter_{clean_applicant_filename}.pdf",
+                                "content": _b64.b64encode(cover_pdf_bytes).decode("utf-8"),
+                            })
+                        if cv_pdf_bytes:
+                            _attachments_b.append({
+                                "name": f"Resume_{clean_applicant_filename}.pdf",
+                                "content": _b64.b64encode(cv_pdf_bytes).decode("utf-8"),
+                            })
+
+                        _brevo_payload = {
+                            "sender": {"name": sender_name, "email": brevo_from},
+                            "to": [{"email": recruiter_email}],
+                            "replyTo": {"email": applicant_email, "name": sender_name},
+                            "subject": subject,
+                            "htmlContent": html_body,
+                            "textContent": plain_body,
+                        }
+                        if _attachments_b:
+                            _brevo_payload["attachment"] = _attachments_b
+
+                        def _do_brevo_http():
+                            _req = _ureq.Request(
+                                "https://api.brevo.com/v3/smtp/email",
+                                data=_json_b.dumps(_brevo_payload).encode("utf-8"),
+                                headers={
+                                    "api-key": b_key,
+                                    "Content-Type": "application/json",
+                                    "User-Agent": "DennoCareerOS/1.0",
+                                },
+                                method="POST",
+                            )
+                            with _ureq.urlopen(_req, timeout=15) as _r:
+                                return _r.status
+
+                        _br_code = await _aio.to_thread(_do_brevo_http)
+                        if _br_code in (200, 201, 202):
+                            sent_status = True
+                            print(f"[EmailService] ✓ Application sent via Brevo HTTP API to={recruiter_email} | from={brevo_from}")
+                except Exception as _brevo_err:
+                    print(f"[EmailService] Brevo application send failed ({_brevo_err}). Trying SMTP fallback...")
+
+            # ── 5c. SMTP fallback (Gmail direct — may be blocked on Render free tier) ──
             def _do_send_smtp(target_rec_email: str, target_rec_domain: str):
                 if target_rec_domain:
                     try:
