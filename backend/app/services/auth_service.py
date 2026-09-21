@@ -304,6 +304,7 @@ class AuthService:
         )
 
         email_sent = True
+        send_error: str | None = None
         try:
             import asyncio
             from app.core.email_sender import send_password_reset
@@ -313,6 +314,7 @@ class AuthService:
             )
             logger.info("Password reset email task dispatched for user_id=%s", user.id)
         except Exception as exc:
+            send_error = str(exc)
             logger.error(
                 "Failed to enqueue password reset email for user_id=%s | error=%s",
                 user.id,
