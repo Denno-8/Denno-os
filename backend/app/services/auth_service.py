@@ -303,20 +303,19 @@ class AuthService:
             and settings.smtp_host
         )
 
-        email_sent = False
-        send_error: str | None = None
+        email_sent = True
         try:
+            import asyncio
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
-            await send_password_reset(user.email, token, first_name)
-            logger.info("Password reset email dispatched for user_id=%s", user.id)
-            email_sent = True
+            asyncio.create_task(
+                send_password_reset(user.email, token, first_name)
+            )
+            logger.info("Password reset email task dispatched for user_id=%s", user.id)
         except Exception as exc:
-            send_error = str(exc)
             logger.error(
-                "Failed to send password reset email for user_id=%s | smtp_user=%s | error=%s",
+                "Failed to enqueue password reset email for user_id=%s | error=%s",
                 user.id,
-                settings.smtp_user or "<not set>",
                 exc,
             )
 
