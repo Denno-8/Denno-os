@@ -151,6 +151,7 @@ async def _send(
                         "to": [{"email": to_email}],
                         "subject": subject,
                         "htmlContent": html_body,
+                        "textContent": text_body,
                     }).encode("utf-8"),
                     headers={
                         "api-key": b_key,
@@ -416,7 +417,10 @@ async def _send(
 
 async def send_password_reset(to_email: str, reset_token: str, first_name: str = "") -> None:
     """Send a password reset email with the one-time JWT link."""
-    reset_link = f"{settings.frontend_origin}/reset-password?token={reset_token}"
+    frontend_base = settings.frontend_origin.rstrip("/") if settings.frontend_origin else "https://denno-os.vercel.app"
+    if settings.app_env == "production" and ("localhost" in frontend_base or "127.0.0.1" in frontend_base):
+        frontend_base = "https://denno-os.vercel.app"
+    reset_link = f"{frontend_base}/reset-password?token={reset_token}"
     greeting = f"Hi {first_name}," if first_name else "Hi,"
 
     subject = "Reset your Denno password"

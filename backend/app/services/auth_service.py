@@ -303,8 +303,11 @@ class AuthService:
             }
 
         token = create_reset_token(str(user.id))
-        reset_link = f"{settings.frontend_origin}/reset-password?token={token}"
-        logger.info("Password reset token issued for user_id=%s", user.id)
+        frontend_base = settings.frontend_origin.rstrip("/") if settings.frontend_origin else "https://denno-os.vercel.app"
+        if settings.app_env == "production" and ("localhost" in frontend_base or "127.0.0.1" in frontend_base):
+            frontend_base = "https://denno-os.vercel.app"
+        reset_link = f"{frontend_base}/reset-password?token={token}"
+        logger.info("Password reset token issued for user_id=%s | link=%s", user.id, reset_link)
 
         # Check if email provider is properly configured before attempting send
         smtp_configured = bool(
@@ -319,29 +322,14 @@ class AuthService:
         email_sent = True
         send_error: str | None = None
         try:
-            import asyncio
             from app.core.email_sender import send_password_reset
             first_name = getattr(user, "first_name", "") or ""
-
-            async def _bg_send_reset():
-                try:
-                    await asyncio.wait_for(
-                        send_password_reset(user.email, token, first_name),
-                        timeout=10.0
-                    )
-                    logger.info("Password reset email delivered for user_id=%s", user.id)
-                except Exception as _mail_exc:
-                    logger.error(
-                        "Password reset email delivery failed for user_id=%s | error=%s",
-                        user.id,
-                        _mail_exc,
-                    )
-
-            asyncio.create_task(_bg_send_reset())
-            logger.info("Password reset email task dispatched for user_id=%s", user.id)
+            await send_password_reset(user.email, token, first_name)
+            logger.info("Password reset email delivered for user_id=%s", user.id)
         except Exception as exc:
             send_error = str(exc)
-            logger.error("Failed to dispatch password reset email task for user_id=%s | error=%s", user.id, exc)
+            email_sent = False
+            logger.error("Failed to send password reset email for user_id=%s | error=%s", user.id, exc)
 
         response: dict = {
             "message": "If that email exists, a reset link has been sent to your inbox.",
@@ -373,12 +361,14 @@ class AuthService:
         return response
 
     async def confirm_password_reset(self, token: str, new_password: str) -> None:
+        clean_token = (token or "").strip()
         try:
-            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            payload = jwt.decode(clean_token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
             if payload.get("type") != "reset":
                 raise ValueError("Not a reset token")
             user_id = int(payload["sub"])
-        except (JWTError, KeyError, ValueError):
+        except (JWTError, KeyError, ValueError) as err:
+            logger.warning("[AuthService] Password reset token verification failed: %s", err)
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token")
 
         user = await self.repo.get_by_id(user_id)
