@@ -653,11 +653,12 @@ class EmailService:
                         _brevo_payload = {
                             "sender": {"name": sender_name, "email": brevo_from},
                             "to": [{"email": recruiter_email}],
-                            "replyTo": {"email": applicant_email, "name": sender_name},
                             "subject": subject,
                             "htmlContent": html_body,
                             "textContent": plain_body,
                         }
+                        if applicant_email and "@" in str(applicant_email):
+                            _brevo_payload["replyTo"] = {"email": applicant_email, "name": sender_name}
                         if _attachments_b:
                             _brevo_payload["attachment"] = _attachments_b
 
@@ -672,13 +673,22 @@ class EmailService:
                                 },
                                 method="POST",
                             )
-                            with _ureq.urlopen(_req, timeout=15) as _r:
-                                return _r.status
+                            try:
+                                with _ureq.urlopen(_req, timeout=15) as _r:
+                                    return _r.status, None
+                            except _ureq.HTTPError as _h_err:
+                                try:
+                                    _b_err = _h_err.read().decode("utf-8", errors="replace")
+                                except Exception:
+                                    _b_err = str(_h_err)
+                                return _h_err.code, _b_err
 
-                        _br_code = await _aio.to_thread(_do_brevo_http)
+                        _br_code, _br_err_msg = await _aio.to_thread(_do_brevo_http)
                         if _br_code in (200, 201, 202):
                             sent_status = True
                             print(f"[EmailService] ✓ Application sent via Brevo HTTP API to={recruiter_email} | from={brevo_from}")
+                        else:
+                            print(f"[EmailService] Brevo HTTP API send failed (HTTP {_br_code}): {_br_err_msg}")
                 except Exception as _brevo_err:
                     print(f"[EmailService] Brevo application send failed ({_brevo_err}). Trying SMTP fallback...")
 
