@@ -29,9 +29,12 @@ export const dataTransferService = {
     // excel format maps to .xlsx extension
     const ext = format === "excel" ? "xlsx" : format;
     a.download = `denno_${resource}.${ext}`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   },
+
 
   async importJSON(resource: string, records: unknown[]): Promise<ImportResult> {
     let res: Response;

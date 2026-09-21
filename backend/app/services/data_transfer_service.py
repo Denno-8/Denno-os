@@ -253,12 +253,53 @@ class DataTransferService:
         imported = 0
         errors: list[str] = []
 
-        for i, raw in enumerate(records):
+        READ_ONLY_KEYS = {
+            "id", "user_id", "created_at", "updated_at", "times_used", "last_used_at",
+            "email_sent", "smtp_error", "conflict_warning", "has_conflict"
+        }
+
+        for i, raw_record in enumerate(records):
+            # Strip read-only system fields
+            raw = {k: v for k, v in raw_record.items() if k not in READ_ONLY_KEYS and v is not None}
+
+            # Smart fallbacks for common user export/import fields
+            if resource == "applications":
+                if "company_name" not in raw or not str(raw.get("company_name")).strip():
+                    raw["company_name"] = "Imported Company"
+                if "role" not in raw or not str(raw.get("role")).strip():
+                    raw["role"] = "Software Developer"
+                if "date_applied" not in raw or not raw["date_applied"]:
+                    raw["date_applied"] = date.today().isoformat()
+                if "stage" in raw and isinstance(raw["stage"], str):
+                    raw["stage"] = raw["stage"].lower().strip()
+            elif resource == "notes":
+                if "title" not in raw or not str(raw.get("title")).strip():
+                    raw["title"] = "Untitled Note"
+            elif resource == "goals":
+                if "label" not in raw or not str(raw.get("label")).strip():
+                    raw["label"] = "Untitled Goal"
+            elif resource == "cv":
+                if "name" not in raw or not str(raw.get("name")).strip():
+                    raw["name"] = "Imported CV"
+            elif resource == "interviews":
+                if "scheduled_at" not in raw or not raw["scheduled_at"]:
+                    raw["scheduled_at"] = datetime.now(timezone.utc).isoformat()
+            elif resource == "emails":
+                if "from_name" not in raw or not str(raw.get("from_name")).strip():
+                    raw["from_name"] = "Recruiter"
+                if "subject" not in raw or not str(raw.get("subject")).strip():
+                    raw["subject"] = "Application Update"
+            elif resource == "jobs":
+                if "title" not in raw or not str(raw.get("title")).strip():
+                    raw["title"] = "Software Engineer"
+                if "company_name" not in raw or not str(raw.get("company_name")).strip():
+                    raw["company_name"] = "Tech Company"
+
             try:
                 payload = schema_cls(**raw)
             except ValidationError as e:
                 first = e.errors()[0]
-                errors.append(f"row {i}: {first['msg']} (field: {first['loc']})")
+                errors.append(f"row {i+1}: {first['msg']} (field: {first['loc']})")
                 continue
 
             try:
@@ -282,34 +323,45 @@ class DataTransferService:
                     await self.jobs.create(payload)
                 imported += 1
             except Exception as e:  # noqa: BLE001 — surface any create-time failure per-row
-                errors.append(f"row {i}: {e}")
+                errors.append(f"row {i+1}: {e}")
 
         await self.session.commit()
         return imported, errors
 
     @staticmethod
-    def parse_csv(content: str, resource: str) -> list[dict]:
-        """Splits comma-joined list fields (e.g. 'Python,AWS') per LIST_FIELDS,
-        and drops empty-string cells so Pydantic falls back to schema defaults
-        instead of failing type coercion on ''."""
+    def _parse_cell_value(k: str, v: Any, list_fields: set[str]) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v_str = v.strip()
+            if v_str == "" or v_str.lower() in ("null", "none"):
+                return None
+            if (v_str.startswith("[") and v_str.endswith("]")) or (v_str.startswith("{") and v_str.endswith("}")):
+                try:
+                    return json.loads(v_str)
+                except Exception:
+                    pass
+            if k in list_fields:
+                return [s.strip() for s in v_str.split(",") if s.strip()]
+            return v_str
+        return v
+
+    @classmethod
+    def parse_csv(cls, content: str, resource: str) -> list[dict]:
         list_fields = LIST_FIELDS.get(resource, set())
         rows = []
         for row in csv.DictReader(io.StringIO(content)):
             cleaned = {}
             for k, v in row.items():
-                if v is None or v == "":
-                    continue
-                if k in list_fields:
-                    cleaned[k] = [s.strip() for s in v.split(",") if s.strip()]
-                else:
-                    cleaned[k] = v
-            rows.append(cleaned)
+                parsed_val = cls._parse_cell_value(k, v, list_fields)
+                if parsed_val is not None:
+                    cleaned[k] = parsed_val
+            if cleaned:
+                rows.append(cleaned)
         return rows
 
-    @staticmethod
-    def parse_excel(content: bytes, resource: str) -> list[dict]:
-        """Read the first sheet of an .xlsx workbook and return rows as dicts.
-        Applies the same list-field splitting logic as parse_csv."""
+    @classmethod
+    def parse_excel(cls, content: bytes, resource: str) -> list[dict]:
         list_fields = LIST_FIELDS.get(resource, set())
         wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
         ws = wb.active
@@ -326,22 +378,15 @@ class DataTransferService:
             for header, cell_val in zip(headers, raw_row):
                 if not header:
                     continue
-                v = "" if cell_val is None else str(cell_val).strip()
-                if v == "":
-                    continue
-                if header in list_fields:
-                    row[header] = [s.strip() for s in v.split(",") if s.strip()]
-                else:
-                    row[header] = v
+                parsed_val = cls._parse_cell_value(header, cell_val, list_fields)
+                if parsed_val is not None:
+                    row[header] = parsed_val
             if row:
                 rows.append(row)
         return rows
 
-    @staticmethod
-    def parse_pdf(content: bytes, resource: str) -> list[dict]:
-        """Extract the first table found across all pages of a PDF using pdfplumber.
-        The first row of the first table is treated as the header. Applies
-        list-field splitting identically to parse_csv."""
+    @classmethod
+    def parse_pdf(cls, content: bytes, resource: str) -> list[dict]:
         list_fields = LIST_FIELDS.get(resource, set())
         headers: list[str] = []
         rows: list[dict] = []
@@ -353,25 +398,21 @@ class DataTransferService:
                     if not table:
                         continue
                     if not headers:
-                        # First non-empty row → headers
                         headers = [str(c).strip() if c else "" for c in table[0]]
                         data_rows = table[1:]
                     else:
-                        data_rows = table  # subsequent tables: treat all rows as data
+                        data_rows = table
 
                     for raw_row in data_rows:
                         row: dict = {}
                         for header, cell_val in zip(headers, raw_row):
                             if not header:
                                 continue
-                            v = "" if cell_val is None else str(cell_val).strip()
-                            if v == "":
-                                continue
-                            if header in list_fields:
-                                row[header] = [s.strip() for s in v.split(",") if s.strip()]
-                            else:
-                                row[header] = v
+                            parsed_val = cls._parse_cell_value(header, cell_val, list_fields)
+                            if parsed_val is not None:
+                                row[header] = parsed_val
                         if row:
                             rows.append(row)
 
         return rows
+

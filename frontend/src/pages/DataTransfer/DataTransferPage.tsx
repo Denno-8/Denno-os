@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Download, Upload, FileJson, FileSpreadsheet, FileText, CheckCircle2, AlertCircle, File } from "lucide-react";
 import { dataTransferService, type ImportResult } from "../../services/dataTransfer.service";
 
-const USER_RESOURCES = ["applications", "notes", "goals", "recruiters", "cv", "interviews", "emails"];
-const PUBLIC_RESOURCES = ["companies", "jobs"];
+const USER_RESOURCES = ["applications", "notes", "goals", "cv", "interviews", "emails"];
+const PUBLIC_RESOURCES = ["jobs"];
+
 
 export default function DataTransferPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
