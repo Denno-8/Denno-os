@@ -190,6 +190,8 @@ def _generate_cover_letter_pdf(
     story.append(Paragraph(f"<b>RE: Application for {esc(role_title)} Position</b>", subject_style))
 
     clean_letter = cover_letter_text.strip() if cover_letter_text else f"Dear Hiring Team at {company_name},\n\nI am writing to express my strong interest in the {role_title} position at {company_name}.\n\nBest regards,\n{safe_name}"
+    if safe_name and safe_name not in ("Job Applicant", "Job Candidate"):
+        clean_letter = clean_letter.replace("Job Applicant", safe_name).replace("Job Candidate", safe_name)
 
     for paragraph_block in clean_letter.split("\n\n"):
         para_text = paragraph_block.strip().replace("\n", "<br/>")
@@ -312,6 +314,8 @@ def _generate_application_letter_pdf(
         f"Enclosed are my Resume, Cover Letter, and relevant credentials for your review.\n\n"
         f"Sincerely,\n{safe_name}"
     )
+    if safe_name and safe_name not in ("Job Applicant", "Job Candidate"):
+        clean_text = clean_text.replace("Job Applicant", safe_name).replace("Job Candidate", safe_name)
 
     for paragraph_block in clean_text.split("\n\n"):
         para_text = paragraph_block.strip().replace("\n", "<br/>")
@@ -391,12 +395,12 @@ class EmailService:
             applicant_phone = applicant_info.get("phone")
             applicant_location = applicant_info.get("location")
 
-        if not applicant_name or not applicant_email:
+        if not applicant_name or applicant_name in ("Job Candidate", "Job Applicant") or not applicant_email:
             user_res = await self.repo.session.execute(select(User).where(User.id == user_id))
             current_user = user_res.scalars().first()
             if current_user:
                 full_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-                applicant_name = applicant_name or full_name or current_user.email.split("@")[0].title()
+                applicant_name = full_name or (current_user.email.split("@")[0].replace(".", " ").replace("_", " ").title() if current_user.email else "") or applicant_name
                 applicant_email = applicant_email or current_user.email
                 applicant_phone = applicant_phone or getattr(current_user, "phone", "")
                 applicant_location = applicant_location or getattr(current_user, "location", "")

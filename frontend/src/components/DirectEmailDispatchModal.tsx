@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Mail, Send, FileText, Sparkles, Wand2, RefreshCw, X, CheckCircle2, AlertCircle, Paperclip, ShieldCheck, Building2, Globe, Rocket, Zap } from "lucide-react";
 import { useCreateApplication } from "../hooks/useApplications";
 import { useCVVersions, useGenerateCVForJob } from "../hooks/useCV";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import type { Job } from "../types/job.types";
 
 interface DirectEmailDispatchModalProps {
@@ -19,7 +20,13 @@ export default function DirectEmailDispatchModal({
 }: DirectEmailDispatchModalProps) {
   const createApplication = useCreateApplication();
   const { data: cvVersions = [] } = useCVVersions();
+  const { data: currentUser } = useCurrentUser();
   const generateCVForJob = useGenerateCVForJob();
+
+  const applicantName =
+    [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(" ") ||
+    (currentUser?.email ? currentUser.email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Dennis");
+  const applicantTitle = currentUser?.title || "Full-Stack Software Engineer";
 
   const [companyName, setCompanyName] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
@@ -35,28 +42,30 @@ export default function DirectEmailDispatchModal({
   const [dispatchedSuccess, setDispatchedSuccess] = useState<any | null>(null);
 
   useEffect(() => {
-    if (initialJob) {
-      setCompanyName(initialJob.company_name);
-      setRoleTitle(initialJob.title);
-      setRecruiterEmail(initialJob.contact_email || "");
-      setSalaryRange(
-        `${initialJob.currency || "KES"} ${initialJob.salary_min.toLocaleString()} - ${initialJob.salary_max.toLocaleString()}`
-      );
-    } else {
-      setCompanyName("");
-      setRoleTitle("");
-      setRecruiterEmail("");
-      setSalaryRange("");
+    if (isOpen) {
+      if (initialJob) {
+        setCompanyName(initialJob.company_name);
+        setRoleTitle(initialJob.title);
+        setRecruiterEmail(initialJob.contact_email || "");
+        setSalaryRange(
+          `${initialJob.currency || "KES"} ${initialJob.salary_min.toLocaleString()} - ${initialJob.salary_max.toLocaleString()}`
+        );
+      } else {
+        setCompanyName("");
+        setRoleTitle("");
+        setRecruiterEmail("");
+        setSalaryRange("");
+      }
+      setCoverLetter("");
+      setAppLetterText("");
+      setCvNotice(null);
+      setDispatchError(null);
+      setDispatchedSuccess(null);
+      if (cvVersions.length > 0) {
+        setCvVersionId(cvVersions[0].id);
+      }
     }
-    setCoverLetter("");
-    setAppLetterText("");
-    setCvNotice(null);
-    setDispatchError(null);
-    setDispatchedSuccess(null);
-    if (cvVersions.length > 0) {
-      setCvVersionId(cvVersions[0].id);
-    }
-  }, [initialJob, cvVersions, isOpen]);
+  }, [isOpen]);
 
   const handleApplyViaPortal = (portalUrl: string) => {
     if (!companyName.trim() || !roleTitle.trim()) {
@@ -118,8 +127,8 @@ I welcome the opportunity to meet with your interview committee to discuss how m
 
 Yours faithfully,
 
-Job Applicant
-Full-Stack Software Engineer`;
+${applicantName}
+${applicantTitle}`;
     setAppLetterText(letter);
   };
 
@@ -139,8 +148,8 @@ Attached, please find my updated ATS-formatted Resume PDF, formal Application Le
 Thank you for your time and consideration.
 
 Best regards,
-Job Applicant
-Full-Stack Software Engineer`;
+${applicantName}
+${applicantTitle}`;
     setCoverLetter(letter);
   };
 
