@@ -334,13 +334,19 @@ async def github_callback(
 @router.get("/smtp-diagnostic")
 async def smtp_diagnostic():
     """
-    Returns the current SMTP configuration and tests connectivity.
-    IMPORTANT: Returns sensitive config — only callable in non-production.
-    Remove or gate this endpoint after confirming email works.
+    Returns the current SMTP/email configuration and tests connectivity.
+    SECURITY: Only accessible in non-production environments.
     """
     import smtplib
     import ssl
+    from fastapi import HTTPException
     from app.core.config import settings
+
+    if settings.app_env == "production":
+        raise HTTPException(
+            status_code=404,
+            detail="Not found.",
+        )
 
     # Compute the actual Resend from-address (mirrors email_sender.py logic)
     resend_from_email = (
