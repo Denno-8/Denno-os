@@ -401,7 +401,11 @@ class JobSource(Base):
     __tablename__ = "job_sources"
 
     id = Column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    # user_id is nullable — job sources are system-level records (created by the daily
+    # aggregator), not per-user. The Alembic 0001 migration created this column as NOT NULL
+    # which caused IntegrityError on every aggregator run. Migration 0003 drops the constraint.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     company_name = Column("name", String(255), nullable=False)
     url = Column(String(500), default="")
     description = Column(Text, default="")

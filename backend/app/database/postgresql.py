@@ -92,6 +92,12 @@ async def init_db():
     if not is_sqlite:
         try:
             pg_statements = [
+                # Drop the NOT NULL constraint on job_sources.user_id —
+                # system-level job source records created by the daily aggregator
+                # don't belong to any user. The Alembic 0001 migration set this as
+                # NOT NULL which caused IntegrityError on every aggregator run.
+                "ALTER TABLE job_sources ALTER COLUMN user_id DROP NOT NULL",
+
                 """ALTER TABLE IF EXISTS job_sources
                    ADD COLUMN IF NOT EXISTS company_id integer,
                    ADD COLUMN IF NOT EXISTS scrape_method character varying(100) DEFAULT 'manual',
