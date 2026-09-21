@@ -302,12 +302,14 @@ class AuthService:
         reset_link = f"{settings.frontend_origin}/reset-password?token={token}"
         logger.info("Password reset token issued for user_id=%s", user.id)
 
-        # Check if SMTP is properly configured before attempting send
+        # Check if email provider is properly configured before attempting send
         smtp_configured = bool(
             settings.emails_enabled
-            and settings.smtp_user
-            and settings.smtp_password
-            and settings.smtp_host
+            and (
+                (settings.smtp_user and settings.smtp_password and settings.smtp_host)
+                or settings.resend_api_key
+                or settings.brevo_api_key
+            )
         )
 
         email_sent = False
