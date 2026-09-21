@@ -97,7 +97,6 @@ async def _send(
 
     if settings.brevo_api_key:
         try:
-            import urllib.request, json
             raw_brevo_from = (settings.brevo_from_email or "").strip()
             if not raw_brevo_from or raw_brevo_from == "noreply@denno.app":
                 if settings.smtp_from_email and settings.smtp_from_email.strip() != "noreply@denno.app":
@@ -105,29 +104,54 @@ async def _send(
                 elif settings.smtp_user:
                     raw_brevo_from = settings.smtp_user.strip()
                 else:
-                    # Fall back to recipient email (works great when sending resets to your own Brevo signup address)
                     raw_brevo_from = to_email
 
             brevo_from = raw_brevo_from
-            req = urllib.request.Request(
-                "https://api.brevo.com/v3/smtp/email",
-                data=json.dumps({
-                    "sender": {"name": sender_name, "email": brevo_from},
-                    "to": [{"email": to_email}],
-                    "subject": subject,
-                    "htmlContent": html_body,
-                }).encode("utf-8"),
-                headers={
-                    "api-key": settings.brevo_api_key.strip(),
-                    "Content-Type": "application/json",
-                    "User-Agent": "DennoCareerOS/1.0",
-                },
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                if resp.status in (200, 201, 202):
-                    logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s | from=%s", to_email, subject, brevo_from)
-                    return
+            b_key = settings.brevo_api_key.strip()
+
+            if b_key.startswith("xsmtpsib-"):
+                # User provided a Brevo SMTP Key (xsmtpsib-...) -> Send via Brevo SMTP Relay
+                import smtplib
+                def _send_brevo_smtp():
+                    with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=12) as s:
+                        s.ehlo()
+                        s.starttls()
+                        s.ehlo()
+                        s.login(brevo_from, b_key)
+                        msg = MIMEMultipart("alternative")
+                        msg["Subject"] = subject
+                        msg["From"] = f"{sender_name} <{brevo_from}>"
+                        msg["To"] = to_email
+                        msg["X-Mailer"] = "Denno Career OS"
+                        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                        msg.attach(MIMEText(html_body, "html", "utf-8"))
+                        s.sendmail(brevo_from, [to_email], msg.as_string())
+
+                await asyncio.to_thread(_send_brevo_smtp)
+                logger.info("[EmailSender] ✓ Email sent via Brevo SMTP Relay to %s | subject=%s | from=%s", to_email, subject, brevo_from)
+                return
+            else:
+                # User provided a Brevo HTTP API Key (xkeysib-...) -> Send via Brevo HTTP API
+                import urllib.request, json
+                req = urllib.request.Request(
+                    "https://api.brevo.com/v3/smtp/email",
+                    data=json.dumps({
+                        "sender": {"name": sender_name, "email": brevo_from},
+                        "to": [{"email": to_email}],
+                        "subject": subject,
+                        "htmlContent": html_body,
+                    }).encode("utf-8"),
+                    headers={
+                        "api-key": b_key,
+                        "Content-Type": "application/json",
+                        "User-Agent": "DennoCareerOS/1.0",
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    if resp.status in (200, 201, 202):
+                        logger.info("[EmailSender] ✓ Email sent via Brevo HTTP API to %s | subject=%s | from=%s", to_email, subject, brevo_from)
+                        return
         except urllib.request.HTTPError as brevo_http_err:
             try:
                 err_body = brevo_http_err.read().decode("utf-8", errors="replace")
@@ -138,7 +162,7 @@ async def _send(
                 brevo_http_err.code, brevo_http_err.reason, brevo_from, err_body
             )
         except Exception as brevo_err:
-            logger.warning("[EmailSender] Brevo HTTP API send failed (%s). Falling back...", brevo_err)
+            logger.warning("[EmailSender] Brevo send failed (%s). Falling back...", brevo_err)
 
     if not settings.smtp_user:
         logger.warning(
