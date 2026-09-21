@@ -134,7 +134,7 @@ export default function FollowUpModal({
               <div>
                 <h4 className="text-xl font-black text-slate-900 dark:text-white">Follow-Up Email Dispatched! 🚀</h4>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                  Your tailored check-in email was successfully sent to <strong>{dispatchDetails?.recruiter_email || recruiterEmail || "the recruiter"}</strong>.
+                  Your tailored check-in email was successfully dispatched to the recruiter.
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
                   Stage updated to "Followed Up"
@@ -159,7 +159,7 @@ export default function FollowUpModal({
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-3">
                     <span className="flex items-center gap-1"><Clock size={12} /> {draft?.days_elapsed ?? 0} days since applied</span>
-                    <span className="flex items-center gap-1"><Mail size={12} /> Recruiter: {draft?.recruiter_email || recruiterEmail || "careers@company.com"}</span>
+                    <span className="flex items-center gap-1"><Mail size={12} /> Recruiter: {(draft?.recruiter_email || recruiterEmail) ? "✦ Stored privately" : "Not on file"}</span>
                   </div>
                 </div>
 

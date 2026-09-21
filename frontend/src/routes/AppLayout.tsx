@@ -44,7 +44,6 @@ const SECTIONS = [
     label: "JOBS",
     links: [
       { to: "/jobs",        label: "Job Feed",       icon: Briefcase },
-      { to: "/companies",   label: "Companies",      icon: Building2 },
       { to: "/job-sources", label: "Source Monitor", icon: Radio },
     ],
   },
@@ -54,7 +53,6 @@ const SECTIONS = [
       { to: "/applications", label: "Applications", icon: ClipboardList },
       { to: "/emails",       label: "Emails",       icon: Mail },
       { to: "/interviews",   label: "Interviews",   icon: Mic },
-      { to: "/recruiters",   label: "Networking",   icon: Users },
       { to: "/calendar",     label: "Calendar",     icon: CalendarIcon },
     ],
   },
@@ -93,11 +91,9 @@ const ADMIN_SECTION = {
 const PAGE_TITLES: Record<string, string> = {
   "/applications":    "Applications",
   "/jobs":            "Job Feed",
-  "/companies":       "Companies",
   "/job-sources":     "Source Monitor",
   "/emails":          "Emails",
   "/interviews":      "Interviews",
-  "/recruiters":      "Networking",
   "/calendar":        "Calendar",
   "/cv":              "CV Manager",
   "/cv-generator":    "CV Generator",

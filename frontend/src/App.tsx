@@ -36,7 +36,6 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 // Code split non-critical routes with auto-reload protection on new deployments
 const ApplicationsPage = lazyWithRetry(() => import("./pages/Applications/ApplicationsPage"));
 const JobsPage = lazyWithRetry(() => import("./pages/Jobs/JobsPage"));
-const CompaniesPage = lazyWithRetry(() => import("./pages/Companies/CompaniesPage"));
 const EmailsPage = lazyWithRetry(() => import("./pages/Emails/EmailsPage"));
 const CVPage = lazyWithRetry(() => import("./pages/CV/CVPage"));
 const CVGeneratorPage = lazyWithRetry(() => import("./pages/CV/CVGeneratorPage"));
@@ -46,7 +45,6 @@ const InterviewsPage = lazyWithRetry(() => import("./pages/Interviews/Interviews
 const CalendarPage = lazyWithRetry(() => import("./pages/Calendar/CalendarPage"));
 const GoalsPage = lazyWithRetry(() => import("./pages/Goals/GoalsPage"));
 const NotesPage = lazyWithRetry(() => import("./pages/Notes/NotesPage"));
-const RecruitersPage = lazyWithRetry(() => import("./pages/Recruiters/RecruitersPage"));
 const JobSourcesPage = lazyWithRetry(() => import("./pages/JobSources/JobSourcesPage"));
 const DataTransferPage = lazyWithRetry(() => import("./pages/DataTransfer/DataTransferPage"));
 const SettingsPage = lazyWithRetry(() => import("./pages/Settings/SettingsPage"));
@@ -105,7 +103,6 @@ export default function App() {
                   <Route element={<AppLayout />}>
                     <Route path="/applications" element={<ApplicationsPage />} />
                     <Route path="/jobs" element={<JobsPage />} />
-                    <Route path="/companies" element={<CompaniesPage />} />
                     <Route path="/emails" element={<EmailsPage />} />
                     <Route path="/cv" element={<CVPage />} />
                     <Route path="/cv-generator" element={<CVGeneratorPage />} />
@@ -115,7 +112,6 @@ export default function App() {
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/goals" element={<GoalsPage />} />
                     <Route path="/notes" element={<NotesPage />} />
-                    <Route path="/recruiters" element={<RecruitersPage />} />
                     <Route path="/job-sources" element={<JobSourcesPage />} />
                     <Route path="/data" element={<DataTransferPage />} />
                     <Route path="/settings" element={<SettingsPage />} />

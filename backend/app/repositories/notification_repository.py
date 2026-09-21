@@ -24,7 +24,7 @@ class NotificationRepository:
         )
         return result.scalars().all()
 
-    async def mark_read(self, notification_id: int, user_id: int) -> bool:
+    async def mark_read(self, notification_id: int, user_id: int, read: bool = True) -> bool:
         result = await self.session.execute(
             select(Notification).where(
                 (Notification.id == notification_id) & (Notification.user_id == user_id)
@@ -32,10 +32,50 @@ class NotificationRepository:
         )
         notif = result.scalars().first()
         if notif:
-            notif.read = True
+            notif.read = read
             await self.session.flush()
             return True
         return False
+
+    async def mark_all_read(self, user_id: int) -> bool:
+        await self.session.execute(
+            update(Notification)
+            .where((Notification.user_id == user_id) & (Notification.read == False))  # noqa: E712
+            .values(read=True)
+        )
+        await self.session.flush()
+        return True
+
+    async def batch_update_read(self, notification_ids: list[int], user_id: int, read: bool) -> bool:
+        if not notification_ids:
+            return True
+        await self.session.execute(
+            update(Notification)
+            .where((Notification.id.in_(notification_ids)) & (Notification.user_id == user_id))
+            .values(read=read)
+        )
+        await self.session.flush()
+        return True
+
+    async def delete_one(self, notification_id: int, user_id: int) -> bool:
+        await self.session.execute(
+            delete(Notification).where(
+                (Notification.id == notification_id) & (Notification.user_id == user_id)
+            )
+        )
+        await self.session.flush()
+        return True
+
+    async def batch_delete(self, notification_ids: list[int], user_id: int) -> bool:
+        if not notification_ids:
+            return True
+        await self.session.execute(
+            delete(Notification).where(
+                (Notification.id.in_(notification_ids)) & (Notification.user_id == user_id)
+            )
+        )
+        await self.session.flush()
+        return True
 
     async def clear_all(self, user_id: int) -> bool:
         await self.session.execute(
@@ -51,3 +91,4 @@ class NotificationRepository:
             )
         )
         return result.scalar() or 0
+

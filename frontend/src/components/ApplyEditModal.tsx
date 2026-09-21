@@ -371,7 +371,7 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
               <h3 className="text-lg font-extrabold text-slate-900 dark:text-white m-0">Application Successfully Submitted &amp; Saved!</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto m-0">
                 {applyMethod === "email"
-                  ? `Official application email dispatched to recruiter (${form.recruiter_email || "recruiter"}) with attached Cover Letter PDF & Resume PDF!`
+                  ? `Official application email dispatched to the recruiter with attached Cover Letter PDF & Resume PDF!`
                   : `Your application for ${form.role} at ${form.company_name} has been logged into your pipeline via company career portal.`
                 }
               </p>
@@ -411,26 +411,7 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
                 </div>
               )}
 
-              {form.recruiter_email && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
-                  <div>
-                    <span className="text-slate-500 font-semibold block">Recruiter Contact</span>
-                    <span className="font-bold text-slate-900 dark:text-white">{form.recruiter_email}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(form.recruiter_email);
-                      setCopiedEmail(true);
-                      setTimeout(() => setCopiedEmail(false), 2000);
-                    }}
-                    className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-[11px] text-blue-600 flex items-center gap-1"
-                  >
-                    {copiedEmail ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                    {copiedEmail ? "Copied!" : "Copy Email"}
-                  </button>
-                </div>
-              )}
+
             </div>
 
             {/* Next Steps / Actions */}
@@ -671,18 +652,7 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Recruiter Email</label>
-              <input
-                type="email"
-                value={form.recruiter_email}
-                onChange={(e) => setForm({ ...form, recruiter_email: e.target.value })}
-                placeholder="recruiter@company.com"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500 text-sm"
-              />
-            </div>
-            <div>
+          <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Salary Range</label>
               <input
                 value={form.salary_range}
@@ -690,7 +660,6 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500 text-sm"
               />
             </div>
-          </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Required Skills (Comma separated)</label>

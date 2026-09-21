@@ -1082,7 +1082,7 @@ export default function JobsPage() {
                   Applied on {new Date(manageAppTarget.app.date_applied).toLocaleDateString()}
                 </div>
                 <div className="text-xs opacity-90">
-                  Recruiter Email: <strong>{manageAppTarget.app.recruiter_email || "careers@company.com"}</strong>
+                  Recruiter Contact: <strong>{manageAppTarget.app.recruiter_email ? "✦ Stored privately" : "Not on file"}</strong>
                 </div>
               </div>
 

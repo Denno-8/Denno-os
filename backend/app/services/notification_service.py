@@ -48,11 +48,24 @@ class NotificationService:
         items = await self.repo.list_for_user(user_id, limit)
         return [_serialize(item) for item in items]
 
-    async def mark_read(self, notification_id: int, user_id: int) -> bool:
-        return await self.repo.mark_read(notification_id, user_id)
+    async def mark_read(self, notification_id: int, user_id: int, read: bool = True) -> bool:
+        return await self.repo.mark_read(notification_id, user_id, read)
+
+    async def mark_all_read(self, user_id: int) -> bool:
+        return await self.repo.mark_all_read(user_id)
+
+    async def batch_mark_read(self, notification_ids: list[int], user_id: int, read: bool = True) -> bool:
+        return await self.repo.batch_update_read(notification_ids, user_id, read)
+
+    async def delete_one(self, notification_id: int, user_id: int) -> bool:
+        return await self.repo.delete_one(notification_id, user_id)
+
+    async def batch_delete(self, notification_ids: list[int], user_id: int) -> bool:
+        return await self.repo.batch_delete(notification_ids, user_id)
 
     async def clear_all(self, user_id: int) -> bool:
         return await self.repo.clear_all(user_id)
+
 
     async def unread_count(self, user_id: int) -> int:
         return await self.repo.unread_count(user_id)

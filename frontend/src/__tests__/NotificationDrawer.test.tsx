@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import NotificationDrawer from "../components/NotificationDrawer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { BrowserRouter } from "react-router-dom";
+
 vi.mock("../hooks/useNotifications", () => ({
   useNotifications: () => ({
     data: [
@@ -11,6 +13,11 @@ vi.mock("../hooks/useNotifications", () => ({
     isLoading: false,
   }),
   useMarkNotificationRead: () => ({ mutate: vi.fn() }),
+  useMarkNotificationUnread: () => ({ mutate: vi.fn() }),
+  useMarkAllNotificationsRead: () => ({ mutate: vi.fn() }),
+  useDeleteNotification: () => ({ mutate: vi.fn() }),
+  useBatchMarkNotificationsRead: () => ({ mutate: vi.fn() }),
+  useBatchDeleteNotifications: () => ({ mutate: vi.fn() }),
   useClearNotifications: () => ({ mutate: vi.fn() }),
 }));
 
@@ -20,7 +27,9 @@ describe("NotificationDrawer Component", () => {
   it("does not render when isOpen is false", () => {
     const { container } = render(
       <QueryClientProvider client={queryClient}>
-        <NotificationDrawer isOpen={false} onClose={() => {}} />
+        <BrowserRouter>
+          <NotificationDrawer isOpen={false} onClose={() => {}} />
+        </BrowserRouter>
       </QueryClientProvider>
     );
     expect(container.firstChild).toBeNull();
@@ -29,7 +38,9 @@ describe("NotificationDrawer Component", () => {
   it("renders notification items when isOpen is true", () => {
     render(
       <QueryClientProvider client={queryClient}>
-        <NotificationDrawer isOpen={true} onClose={() => {}} />
+        <BrowserRouter>
+          <NotificationDrawer isOpen={true} onClose={() => {}} />
+        </BrowserRouter>
       </QueryClientProvider>
     );
 
@@ -38,3 +49,4 @@ describe("NotificationDrawer Component", () => {
     expect(screen.getByText("AI Engineer at Google")).toBeInTheDocument();
   });
 });
+

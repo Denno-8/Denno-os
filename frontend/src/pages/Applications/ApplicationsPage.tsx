@@ -896,24 +896,6 @@ function PipelineInspectorModal({
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Recruiter / Hiring Contact Email</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={recruiterEmail}
-                      onChange={(e) => setRecruiterEmail(e.target.value)}
-                      placeholder="e.g. recruiter@company.com"
-                      className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold outline-none text-slate-900 dark:text-white"
-                    />
-                    <button
-                      onClick={() => onUpdate({ recruiter_email: recruiterEmail })}
-                      className="px-3 py-2 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 transition-colors"
-                    >
-                      <Save size={13} />
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* AI Channel Detection & Application Method Indicator */}
@@ -1305,16 +1287,7 @@ function PipelineInspectorModal({
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Recruiter Email</label>
-                    <input
-                      type="email"
-                      value={editRecruiter}
-                      onChange={(e) => setEditRecruiter(e.target.value)}
-                      placeholder="recruiter@company.com"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-900 dark:text-white outline-none focus:border-blue-500"
-                    />
-                  </div>
+
                   <div>
                     <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Salary Range</label>
                     <input
@@ -1373,7 +1346,7 @@ function PipelineInspectorModal({
                     { label: "ATS Score", value: `${app.cv_snapshot?.ats_score ?? app.ats_score ?? "-"}%` },
                     { label: "Match Score", value: `${app.match_score ?? 85}%` },
                     { label: "Apply Method", value: app.apply_method || "website" },
-                    { label: "Recruiter", value: app.recruiter_email || "—" },
+                    { label: "Recruiter", value: app.recruiter_email ? "✦ Stored privately" : "—" },
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-slate-800 rounded-xl px-3 py-2 flex flex-col gap-0.5">
                       <span className="text-slate-400 text-[10px] font-bold uppercase">{label}</span>
@@ -1589,16 +1562,6 @@ function FullAddApplicationModal({
                 placeholder="e.g. KES 300,000 - KES 450,000"
                 value={salaryRange}
                 onChange={(e) => setSalaryRange(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Recruiter Email</label>
-              <input
-                type="email"
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold"
-                placeholder="e.g. careers@company.com"
-                value={recruiterEmail}
-                onChange={(e) => setRecruiterEmail(e.target.value)}
               />
             </div>
           </div>

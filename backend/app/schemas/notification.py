@@ -17,3 +17,12 @@ class NotificationOut(BaseModel):
     link: str = ""
     read: bool = False
     created_at: datetime | str | None = None
+
+
+class BatchNotificationAction(BaseModel):
+    ids: list[int]
+    read: bool = True
+
+
+class BatchNotificationDelete(BaseModel):
+    ids: list[int]

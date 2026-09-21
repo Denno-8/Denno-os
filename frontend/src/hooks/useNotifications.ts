@@ -75,6 +75,57 @@ export function useMarkNotificationRead() {
   });
 }
 
+export function useMarkNotificationUnread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notificationsService.markUnread(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => notificationsService.markAllRead(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notificationsService.deleteNotification(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useBatchMarkNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, read }: { ids: string[]; read: boolean }) =>
+      notificationsService.batchMarkRead(ids, read),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useBatchDeleteNotifications() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => notificationsService.batchDelete(ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
 export function useClearNotifications() {
   const qc = useQueryClient();
   return useMutation({
@@ -84,3 +135,4 @@ export function useClearNotifications() {
     },
   });
 }
+

@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user_id, get_database
-from app.schemas.notification import NotificationCreate, NotificationOut
+from app.schemas.notification import (
+    NotificationCreate,
+    NotificationOut,
+    BatchNotificationAction,
+    BatchNotificationDelete,
+)
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -44,10 +49,63 @@ async def mark_notification_read(
     user_id: str = Depends(get_current_user_id),
     service: NotificationService = Depends(get_service),
 ):
-    success = await service.mark_read(notification_id, int(user_id))
+    success = await service.mark_read(notification_id, int(user_id), True)
     if not success:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
     return {"status": "read"}
+
+
+@router.patch("/{notification_id}/unread")
+async def mark_notification_unread(
+    notification_id: int,
+    user_id: str = Depends(get_current_user_id),
+    service: NotificationService = Depends(get_service),
+):
+    success = await service.mark_read(notification_id, int(user_id), False)
+    if not success:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
+    return {"status": "unread"}
+
+
+@router.delete("/{notification_id}")
+async def delete_notification(
+    notification_id: int,
+    user_id: str = Depends(get_current_user_id),
+    service: NotificationService = Depends(get_service),
+):
+    success = await service.delete_one(notification_id, int(user_id))
+    if not success:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
+    return {"status": "deleted"}
+
+
+@router.post("/mark-all-read")
+async def mark_all_read(
+    user_id: str = Depends(get_current_user_id),
+    service: NotificationService = Depends(get_service),
+):
+    await service.mark_all_read(int(user_id))
+    return {"status": "all_read"}
+
+
+@router.post("/batch-read")
+async def batch_mark_read(
+    payload: BatchNotificationAction,
+    user_id: str = Depends(get_current_user_id),
+    service: NotificationService = Depends(get_service),
+):
+    await service.batch_mark_read(payload.ids, int(user_id), payload.read)
+    return {"status": "updated", "count": len(payload.ids)}
+
+
+@router.post("/batch-delete")
+async def batch_delete_notifications(
+    payload: BatchNotificationDelete,
+    user_id: str = Depends(get_current_user_id),
+    service: NotificationService = Depends(get_service),
+):
+    await service.batch_delete(payload.ids, int(user_id))
+    return {"status": "deleted", "count": len(payload.ids)}
 
 
 @router.post("/clear")
@@ -57,6 +115,7 @@ async def clear_notifications(
 ):
     await service.clear_all(int(user_id))
     return {"status": "cleared"}
+
 
 
 @router.get("/stream")
