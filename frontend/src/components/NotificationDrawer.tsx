@@ -487,7 +487,7 @@ const styles: Record<string, React.CSSProperties> = {
   typePill: {
     background: "none", border: "1px solid var(--border-color, rgba(255,255,255,0.1))",
     color: "var(--text-secondary, #94a3b8)", fontSize: 10, fontWeight: 600,
-    padding: "3px 8px", borderRadius: 12, cursor: "pointer", whitespace: "nowrap" as any,
+    padding: "3px 8px", borderRadius: 12, cursor: "pointer", whiteSpace: "nowrap",
   },
   typePillActive: {
     background: "rgba(59, 130, 246, 0.2)", borderColor: "rgba(59, 130, 246, 0.4)",
