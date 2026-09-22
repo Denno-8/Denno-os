@@ -209,14 +209,14 @@ export default function ApplicationsPage() {
   return (
     <div className="p-2 space-y-6">
       {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">Application Pipeline &amp; Workflow</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Comprehensive application lifecycle tracking with applied CVs, cover letters, recruiter contacts &amp; status telemetry</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 hidden sm:block">Comprehensive application lifecycle tracking with applied CVs, cover letters, recruiter contacts &amp; status telemetry</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search Filter */}
-          <div className="flex-1 max-w-xs relative">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
             <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
@@ -240,7 +240,7 @@ export default function ApplicationsPage() {
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
               }`}
             >
-              <LayoutGrid size={14} /> Board
+              <LayoutGrid size={14} /> <span className="hidden xs:inline">Board</span>
             </button>
             <button
               onClick={() => setViewMode("list")}
@@ -250,40 +250,43 @@ export default function ApplicationsPage() {
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
               }`}
             >
-              <List size={14} /> List View
+              <List size={14} /> <span className="hidden xs:inline">List</span>
             </button>
           </div>
 
+          {/* Action Buttons — icon-only on mobile, labelled on sm+ */}
           <button
             onClick={handleSyncResponses}
             disabled={isSyncingResponses}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-extrabold px-3.5 py-2.5 shadow-md transition-all hover:scale-[1.02] disabled:opacity-50"
-            title="Connects to configured email via IMAP to sync recruiter responses, confirmation emails & interview invites"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-extrabold px-3 py-2.5 shadow-md transition-all hover:scale-[1.02] disabled:opacity-50"
+            title={isSyncingResponses ? "Syncing Inbox…" : "Sync Recruiter Responses"}
           >
             <RefreshCw size={15} className={isSyncingResponses ? "animate-spin text-white" : "text-emerald-200"} />
-            <span>{isSyncingResponses ? "Syncing Inbox…" : "Sync Recruiter Responses"}</span>
+            <span className="hidden md:inline">{isSyncingResponses ? "Syncing…" : "Sync Responses"}</span>
           </button>
           <button
             onClick={() => setShowEmailDispatch(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white text-sm font-extrabold px-4 py-2.5 shadow-md transition-all hover:scale-[1.02]"
-            title="Dispatch a manual application email with attached PDF Resume & Cover Letter to a recruiter"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white text-sm font-extrabold px-3 py-2.5 shadow-md transition-all hover:scale-[1.02]"
+            title="Send Email Application"
           >
             <Mail size={16} />
-            <span>Send Email Application</span>
+            <span className="hidden md:inline">Send Email</span>
           </button>
           <button
             onClick={() => setShowTemplates(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-sm font-semibold px-4 py-2.5 shadow-md transition-all hover:scale-[1.02]"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-sm font-semibold px-3 py-2.5 shadow-md transition-all hover:scale-[1.02]"
+            title="Templates"
           >
             <Sparkles size={16} className="text-blue-400" />
-            <span className="hidden sm:inline">Templates</span>
+            <span className="hidden md:inline">Templates</span>
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 shadow-md transition-all hover:scale-[1.02]"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-3 py-2.5 shadow-md transition-all hover:scale-[1.02]"
+            title="Add Application"
           >
             <Plus size={16} />
-            <span>Add Application</span>
+            <span className="hidden sm:inline">Add Application</span>
           </button>
         </div>
       </div>
