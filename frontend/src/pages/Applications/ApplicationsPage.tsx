@@ -24,7 +24,7 @@ import FollowUpModal from "../../components/FollowUpModal";
 import { applicationsService } from "../../services/applications.service";
 import { API_URL, getAccessToken } from "../../services/api";
 import { ALL_STAGES, type ApplicationStage, type ApplicationCreateInput } from "../../types/application.types";
-import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements } from "../../utils/jobScrutiny";
+import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements, _extractPortalPlatformFromUrl, getPortalAtsSystem } from "../../utils/jobScrutiny";
 
 const BOARD_STAGES: ApplicationStage[] = [
   "Applied", "Confirmed", "Unresponded", "Assessment", "Technical",
@@ -472,14 +472,17 @@ export default function ApplicationsPage() {
                       <div className="text-[11px] text-slate-400 dark:text-slate-500 pt-1 flex items-center justify-between gap-1 flex-wrap border-t border-slate-100 dark:border-slate-800">
                         <span>Applied {new Date(a.date_applied).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                         <div className="flex items-center gap-1 flex-wrap mt-1">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                            a.apply_method === "email" || a.recruiter_email
-                              ? "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800"
-                              : "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800"
-                          }`}>
-                            {a.apply_method === "email" || a.recruiter_email ? <Mail size={10} /> : <ExternalLink size={10} />}
-                            {a.apply_method === "email" || a.recruiter_email ? "Email Sent" : "Website"}
-                          </span>
+                          {/* Channel badge: check apply_method first (explicit intent), fallback to recruiter_email */}
+                          {a.apply_method === "email" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800">
+                              <Mail size={10} /> Email Sent
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800">
+                              <Globe size={10} />
+                              {_extractPortalPlatformFromUrl(a.source_url || "") || "Portal"}
+                            </span>
+                          )}
                           {(a.cv_snapshot || a.cv_version_id) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
                               <FileText size={10} /> CV ({a.cv_snapshot?.ats_score ?? a.ats_score}% ATS)
@@ -727,6 +730,8 @@ function PipelineInspectorModal({
   );
   const [editSalary, setEditSalary] = useState(app.salary_range || "");
   const [editRecruiter, setEditRecruiter] = useState(app.recruiter_email || "");
+  const [editApplyMethod, setEditApplyMethod] = useState(app.apply_method || "website");
+  const [editSourceUrl, setEditSourceUrl] = useState(app.source_url || "");
   const [editStage, setEditStage] = useState(app.stage || "Applied");
   const [editNotes, setEditNotes] = useState(app.notes || "");
   const [editSaveMsg, setEditSaveMsg] = useState<string | null>(null);
@@ -901,27 +906,162 @@ function PipelineInspectorModal({
 
               </div>
 
-              {/* AI Channel Detection & Application Method Indicator */}
-              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1 bg-blue-600 text-white rounded-md text-xs flex items-center justify-center">
-                      {analyzeJobApplicationChannel(app).channel === "email" ? <Mail size={12} /> : <Globe size={12} />}
-                    </span>
-                    <span className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
-                      Application Channel: {analyzeJobApplicationChannel(app).channel === "email" ? "Direct Recruiter Email" : "Official Web Portal"}
-                    </span>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                    analyzeJobApplicationChannel(app).channel === "email" ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+
+              {/* ── Enhanced Application Channel Panel ── */}
+              {(() => {
+                const ch = analyzeJobApplicationChannel(app);
+                const isEmail = ch.channel === "email";
+                const platform = _extractPortalPlatformFromUrl(app.source_url || "");
+                const atsSystem = platform ? getPortalAtsSystem(platform) : "";
+
+                // Parse portal checklist from app.checklist JSON
+                const portalChecklist = app.checklist || {};
+                const checklistItems = [
+                  { key: "cv_uploaded", label: "CV / Resume Uploaded" },
+                  { key: "cover_letter", label: "Cover Letter Attached" },
+                  { key: "profile_complete", label: "Online Profile Complete" },
+                  { key: "ref_saved", label: "Application Ref Saved" },
+                ];
+                const completedCount = checklistItems.filter(c => portalChecklist[c.key]).length;
+
+                return (
+                  <div className={`rounded-2xl border overflow-hidden ${
+                    isEmail
+                      ? "border-rose-200 dark:border-rose-800"
+                      : "border-blue-200 dark:border-blue-800"
                   }`}>
-                    {analyzeJobApplicationChannel(app).channel}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                  {analyzeJobApplicationChannel(app).reason}
-                </div>
-              </div>
+                    {/* Header */}
+                    <div className={`px-4 py-2.5 flex items-center justify-between ${
+                      isEmail
+                        ? "bg-rose-50 dark:bg-rose-950/40"
+                        : "bg-blue-50 dark:bg-blue-950/30"
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`p-1.5 rounded-lg text-white flex items-center justify-center ${isEmail ? "bg-rose-600" : "bg-blue-600"}`}>
+                          {isEmail ? <Mail size={13} /> : <Globe size={13} />}
+                        </span>
+                        <span className="font-extrabold text-slate-900 dark:text-white text-[11px] uppercase tracking-wider">
+                          {isEmail ? "Direct Email Application" : `Portal Application${platform ? ` · ${platform}` : ""}`}
+                        </span>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                        isEmail
+                          ? "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200"
+                          : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                      }`}>
+                        {isEmail ? "Email" : "Portal"}
+                      </span>
+                    </div>
+
+                    {/* Body — two-panel grid */}
+                    <div className="p-4 bg-white dark:bg-slate-900/30 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Left: reason + method */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                          {ch.reason}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Method:</span>
+                          <span className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                            {app.apply_method || (isEmail ? "email" : "website")}
+                          </span>
+                        </div>
+                        {isEmail && app.recruiter_email && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Recipient:</span>
+                            <span className="text-[10px] font-mono text-rose-700 dark:text-rose-300 font-bold">
+                              {app.recruiter_email.replace(/(.{2}).+(@.+)/, "$1***$2")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: portal or email details */}
+                      {isEmail ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">ATS Bypass:</span>
+                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Recruiter Inbox Direct</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Follow-Up:</span>
+                            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                              {app.date_applied
+                                ? (() => {
+                                    const days = Math.floor((Date.now() - new Date(app.date_applied).getTime()) / 86400000);
+                                    return days < 7 ? `${days}d ago — too early` : days < 14 ? `${days}d — follow-up recommended` : `${days}d — overdue, follow-up now`;
+                                  })()
+                                : "—"
+                              }
+                            </span>
+                          </div>
+                          {ch.isEmailVerified && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                              <CheckCircle2 size={10} /> Email Verified
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {atsSystem && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">ATS System:</span>
+                              <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300">{atsSystem}</span>
+                            </div>
+                          )}
+                          {!isEmail && completedCount > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Checklist:</span>
+                              <span className={`text-[10px] font-bold ${completedCount === checklistItems.length ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                {completedCount}/{checklistItems.length} Complete
+                              </span>
+                            </div>
+                          )}
+                          {app.source_url && (
+                            <a href={app.source_url} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                              <ExternalLink size={10} /> View Portal Listing
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Portal Submission Tracker — only for portal apps */}
+                    {!isEmail && (
+                      <div className="px-4 pb-4 pt-0 bg-white dark:bg-slate-900/30 border-t border-blue-100 dark:border-blue-900/40">
+                        <div className="pt-3 space-y-2">
+                          <div className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <ShieldCheck size={11} className="text-blue-500" /> Portal Submission Tracker
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {checklistItems.map(item => (
+                              <div key={item.key} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold ${
+                                portalChecklist[item.key]
+                                  ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+                                  : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+                              }`}>
+                                {portalChecklist[item.key]
+                                  ? <CheckCircle2 size={10} className="text-emerald-600 shrink-0" />
+                                  : <div className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 dark:border-slate-600 shrink-0" />
+                                }
+                                {item.label}
+                              </div>
+                            ))}
+                          </div>
+                          {/* ATS tip banner */}
+                          <div className="flex items-start gap-2 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl px-3 py-2 mt-2">
+                            <Sparkles size={12} className="text-blue-500 shrink-0 mt-0.5" />
+                            <p className="text-[10px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed">
+                              <strong>ATS Tip:</strong> Portal applications go through automated screening. Ensure your CV uses keywords from the job description and standard section headings (Experience, Education, Skills).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Required Skills & Match Telemetry */}
               <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
@@ -970,6 +1110,7 @@ function PipelineInspectorModal({
               </div>
             </div>
           )}
+
 
           {activeTab === "assets" && (
             <div className="space-y-5">
@@ -1300,6 +1441,40 @@ function PipelineInspectorModal({
                       className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-900 dark:text-white outline-none focus:border-blue-500"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Application Channel / Method</label>
+                    <select
+                      value={editApplyMethod}
+                      onChange={(e) => setEditApplyMethod(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="website">🌐 Applied via Portal / Website</option>
+                      <option value="email">📧 Dispatched via Direct Email</option>
+                    </select>
+                  </div>
+
+                  {editApplyMethod === "email" ? (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Recruiter / HR Email Address</label>
+                      <input
+                        value={editRecruiter}
+                        onChange={(e) => setEditRecruiter(e.target.value)}
+                        placeholder="e.g. careers@company.com"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Source Job Listing URL</label>
+                      <input
+                        value={editSourceUrl}
+                        onChange={(e) => setEditSourceUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1321,9 +1496,11 @@ function PipelineInspectorModal({
                         role: editRole,
                         date_applied: editDate,
                         stage: editStage as any,
-                        recruiter_email: editRecruiter,
-                        salary_range: editSalary,
-                        notes: editNotes,
+                        recruiter_email: editRecruiter || undefined,
+                        salary_range: editSalary || undefined,
+                        notes: editNotes || undefined,
+                        apply_method: editApplyMethod,
+                        source_url: editSourceUrl || undefined,
                       });
                       setEditSaveMsg("✓ Application updated successfully!");
                       setTimeout(() => setEditSaveMsg(null), 3000);
@@ -1424,8 +1601,27 @@ function FullAddApplicationModal({
   const [isGeneratingCV, setIsGeneratingCV] = useState(false);
   const [cvNotice, setCvNotice] = useState<string | null>(null);
 
+  // ── Portal-specific state ──────────────────────────────────────────────────
+  const [portalPlatform, setPortalPlatform] = useState("");
+  const [applicationRef, setApplicationRef] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [portalChecklist, setPortalChecklist] = useState({
+    cv_uploaded: false,
+    cover_letter: false,
+    profile_complete: false,
+    ref_saved: false,
+  });
+
   const { data: cvVersions = [] } = useCVVersions();
   const generateCVForJob = useGenerateCVForJob();
+
+  // Auto-detect portal platform from URL as user types
+  const detectedPlatform = _extractPortalPlatformFromUrl(sourceUrl);
+  const atsHint = portalPlatform
+    ? getPortalAtsSystem(portalPlatform)
+    : detectedPlatform
+    ? getPortalAtsSystem(detectedPlatform)
+    : "";
 
   const handleGenerateCV = () => {
     if (!role.trim() || !company.trim()) {
@@ -1444,6 +1640,10 @@ function FullAddApplicationModal({
           setIsGeneratingCV(false);
           setCvVersionId(newCV.id);
           setCvNotice(`✓ CV "${newCV.name}" generated & attached! (${newCV.ats_score}% ATS Score)`);
+          // auto-check cv_uploaded if on portal mode
+          if (applyMethod === "website") {
+            setPortalChecklist(prev => ({ ...prev, cv_uploaded: true }));
+          }
         },
         onError: () => {
           setIsGeneratingCV(false);
@@ -1457,7 +1657,25 @@ function FullAddApplicationModal({
     if (!company.trim() || !role.trim()) return;
     const reqSkills = skills
       ? skills.split(",").map((s) => s.trim()).filter(Boolean)
-      : ["Python", "FastAPI", "React", "PostgreSQL"];
+      : [];
+
+    // Build checklist — merge portal checklist + any ref stored
+    const checklistData: Record<string, boolean> = applyMethod === "website"
+      ? { ...portalChecklist, ref_saved: !!applicationRef || portalChecklist.ref_saved }
+      : {};
+
+    // Store portal metadata in notes if present (non-breaking, no migration needed)
+    let notesWithMeta = notes.trim();
+    if (applyMethod === "website" && (portalPlatform || applicationRef || deadline)) {
+      const metaParts: string[] = [];
+      if (portalPlatform) metaParts.push(`Portal: ${portalPlatform}`);
+      if (applicationRef) metaParts.push(`Reference: ${applicationRef}`);
+      if (deadline) metaParts.push(`Deadline: ${deadline}`);
+      if (metaParts.length > 0) {
+        notesWithMeta = `[PORTAL META] ${metaParts.join(" | ")}\n\n${notesWithMeta}`.trim();
+      }
+    }
+
     onSubmit({
       company_name: company.trim(),
       role: role.trim(),
@@ -1468,55 +1686,88 @@ function FullAddApplicationModal({
       source_url: sourceUrl.trim() || undefined,
       apply_method: applyMethod,
       required_skills: reqSkills,
-      notes: notes.trim() || undefined,
+      notes: notesWithMeta || undefined,
       cv_version_id: cvVersionId || undefined,
     });
   };
 
+  const portalChecklistItems = [
+    { key: "cv_uploaded" as const, label: "CV Uploaded to Portal" },
+    { key: "cover_letter" as const, label: "Cover Letter Attached" },
+    { key: "profile_complete" as const, label: "Online Profile Complete" },
+    { key: "ref_saved" as const, label: "Reference Number Saved" },
+  ];
+
+  const portalCompletedCount = Object.values(portalChecklist).filter(Boolean).length;
+
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-          <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Plus className="text-blue-500" size={20} /> Add Application to Pipeline
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className={`px-6 py-4 flex items-center justify-between border-b sticky top-0 z-10 ${
+          applyMethod === "email"
+            ? "bg-gradient-to-r from-rose-900 via-rose-800 to-rose-900 border-rose-700"
+            : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-slate-700"
+        }`}>
+          <div>
+            <h3 className="font-extrabold text-lg text-white flex items-center gap-2 m-0">
+              {applyMethod === "email" ? <Mail size={20} className="text-rose-300" /> : <Globe size={20} className="text-blue-300" />}
+              {applyMethod === "email" ? "Add Email Application" : "Add Portal Application"}
+            </h3>
+            <p className="text-xs m-0 mt-0.5 font-medium opacity-70 text-white">
+              {applyMethod === "email"
+                ? "Track a direct recruiter email submission"
+                : "Track an application submitted via a job portal or company website"
+              }
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-300 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-3 text-xs">
-          {/* Application Channel Selector */}
-          <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="p-6 space-y-4 text-xs">
+          {/* ── Application Channel Selector ── */}
+          <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-800/60 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
             <button
               type="button"
               onClick={() => setApplyMethod("website")}
-              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-3 px-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
                 applyMethod === "website"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-blue-300"
               }`}
             >
-              <ExternalLink size={13} /> Applied via Website
+              <Globe size={16} />
+              <span>Portal / Website</span>
+              <span className={`text-[10px] font-normal ${applyMethod === "website" ? "text-blue-100" : "text-slate-400"}`}>
+                LinkedIn, BrighterMonday, etc.
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setApplyMethod("email")}
-              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-3 px-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
                 applyMethod === "email"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                  ? "bg-rose-600 text-white shadow-md"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-rose-300"
               }`}
             >
-              <Mail size={13} /> Dispatch via Email
+              <Mail size={16} />
+              <span>Direct Email</span>
+              <span className={`text-[10px] font-normal ${applyMethod === "email" ? "text-rose-100" : "text-slate-400"}`}>
+                Sent to recruiter inbox
+              </span>
             </button>
           </div>
 
+          {/* ── Core Fields ── */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Company Name *</label>
               <input
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold focus:border-blue-400 transition-colors"
                 placeholder="e.g. Safaricom"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
@@ -1525,7 +1776,7 @@ function FullAddApplicationModal({
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Role Title *</label>
               <input
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold focus:border-blue-400 transition-colors"
                 placeholder="e.g. Senior Software Developer"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
@@ -1567,17 +1818,164 @@ function FullAddApplicationModal({
                 onChange={(e) => setSalaryRange(e.target.value)}
               />
             </div>
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Source Job Listing URL</label>
+              <input
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold"
+                placeholder="https://..."
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Source Job Listing URL</label>
-            <input
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold"
-              placeholder="https://..."
-              value={sourceUrl}
-              onChange={(e) => setSourceUrl(e.target.value)}
-            />
-          </div>
+          {/* ── EMAIL-SPECIFIC: Recruiter Email ── */}
+          {applyMethod === "email" && (
+            <div className="bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-2xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Mail size={13} className="text-rose-600" />
+                <span className="font-extrabold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">
+                  Direct Email Application Details
+                </span>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Recruiter / HR Email Address</label>
+                <input
+                  className="w-full bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold focus:border-rose-400"
+                  placeholder="e.g. careers@company.com"
+                  value={recruiterEmail}
+                  onChange={(e) => setRecruiterEmail(e.target.value)}
+                  type="email"
+                />
+              </div>
+              <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium">
+                ✓ Direct email bypasses ATS — your CV lands directly in the recruiter's inbox.
+              </p>
+            </div>
+          )}
+
+          {/* ── PORTAL-SPECIFIC: Platform, ATS hint, Deadline, Reference, Checklist ── */}
+          {applyMethod === "website" && (
+            <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Globe size={13} className="text-blue-600" />
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">
+                    Portal Application Details
+                  </span>
+                </div>
+                {atsHint && (
+                  <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                    ATS: {atsHint}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Job Portal Platform</label>
+                  <select
+                    value={portalPlatform || detectedPlatform}
+                    onChange={(e) => setPortalPlatform(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold focus:border-blue-400"
+                  >
+                    <option value="">— Select Platform —</option>
+                    <option value="LinkedIn">LinkedIn</option>
+                    <option value="MyJobMag">MyJobMag</option>
+                    <option value="BrighterMonday">BrighterMonday</option>
+                    <option value="Fuzu">Fuzu</option>
+                    <option value="Glassdoor">Glassdoor</option>
+                    <option value="Indeed">Indeed</option>
+                    <option value="JobWebKenya">JobWebKenya</option>
+                    <option value="PigiMe">PigiMe</option>
+                    <option value="Greenhouse ATS">Greenhouse ATS</option>
+                    <option value="Workday ATS">Workday ATS</option>
+                    <option value="Lever ATS">Lever ATS</option>
+                    <option value="iCIMS ATS">iCIMS ATS</option>
+                    <option value="BambooHR">BambooHR</option>
+                    <option value="SmartRecruiters">SmartRecruiters</option>
+                    <option value="Company Website">Company Website (Direct)</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {detectedPlatform && !portalPlatform && (
+                    <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                      ✓ Auto-detected: {detectedPlatform}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Application Deadline</label>
+                  <input
+                    type="date"
+                    className="w-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-semibold focus:border-blue-400"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Application Reference / Confirmation Number
+                  <span className="text-slate-400 font-normal ml-1">(optional)</span>
+                </label>
+                <input
+                  className="w-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-2 outline-none font-mono font-semibold focus:border-blue-400"
+                  placeholder="e.g. APP-2024-10482"
+                  value={applicationRef}
+                  onChange={(e) => {
+                    setApplicationRef(e.target.value);
+                    if (e.target.value) setPortalChecklist(prev => ({ ...prev, ref_saved: true }));
+                  }}
+                />
+              </div>
+
+              {/* Portal Submission Checklist */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-extrabold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck size={12} className="text-blue-500" /> Portal Submission Checklist
+                  </label>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${
+                    portalCompletedCount === 4
+                      ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300"
+                      : "bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-300"
+                  }`}>
+                    {portalCompletedCount}/4 Done
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {portalChecklistItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setPortalChecklist(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all font-semibold text-[11px] ${
+                        portalChecklist[item.key]
+                          ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300"
+                          : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-300"
+                      }`}
+                    >
+                      {portalChecklist[item.key]
+                        ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                        : <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 shrink-0" />
+                      }
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ATS Tip */}
+              <div className="flex items-start gap-2 bg-blue-100/60 dark:bg-blue-900/30 rounded-xl px-3 py-2">
+                <Sparkles size={12} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-blue-800 dark:text-blue-300 leading-relaxed">
+                  <strong>ATS Tip:</strong> Use keywords from the job description in your CV. Avoid images or tables — ATS parsers prefer clean text with standard headings.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Required Skills (Comma separated)</label>
@@ -1639,7 +2037,7 @@ function FullAddApplicationModal({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="font-bold text-slate-700 dark:text-slate-300">
-                Cover Letter / Application Letter
+                {applyMethod === "email" ? "Cover Letter / Application Letter" : "Cover Letter (optional for portal)"}
               </label>
               <span className={`text-[11px] font-semibold ${
                 notes.length === 0 ? "text-slate-400" :
@@ -1651,25 +2049,39 @@ function FullAddApplicationModal({
               </span>
             </div>
             <textarea
-              rows={5}
+              rows={4}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl p-3 outline-none font-medium leading-relaxed resize-none focus:border-blue-400 dark:focus:border-blue-600 transition-colors"
-              placeholder="Paste or type your cover letter here. This letter will be stored with your application and sent to the recruiter."
+              placeholder={applyMethod === "email"
+                ? "Paste or type your cover letter here. This letter will be stored with your application and sent to the recruiter."
+                : "Optional: paste your cover letter or notes about this application here."
+              }
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                if (applyMethod === "website" && e.target.value.length > 50) {
+                  setPortalChecklist(prev => ({ ...prev, cover_letter: true }));
+                }
+              }}
             />
             <p className="text-[11px] text-slate-400 mt-1">Tip: Generate a tailored letter in the Cover Letter Engine, then paste it here.</p>
           </div>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex gap-3 bg-slate-50 dark:bg-slate-800/40 sticky bottom-0">
           <button
             disabled={!company.trim() || !role.trim()}
             onClick={handleSubmit}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-xs font-bold disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center gap-1.5"
+            className={`flex-1 text-white rounded-xl py-2.5 text-xs font-bold disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center gap-1.5 ${
+              applyMethod === "email"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            <CheckCircle2 size={14} /> Create Application
+            <CheckCircle2 size={14} />
+            {applyMethod === "email" ? "Track Email Application" : "Track Portal Application"}
           </button>
-          <button onClick={onClose} className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl py-2.5 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          <button onClick={onClose} className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl py-2.5 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             Cancel
           </button>
         </div>

@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
     brevo_from_email: str = Field(default="", alias="BREVO_FROM_EMAIL")
     sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
+    # Gmail IMAP — dedicated credentials for reading the inbox (inbox sync / Sync Responses).
+    # When outbound mail is sent via Brevo, smtp_user/smtp_password are not set, so a separate
+    # IMAP_USER + IMAP_PASSWORD (Gmail App Password) is required for inbox access.
+    imap_user: str = Field(default="", alias="IMAP_USER")
+    imap_password: str = Field(default="", alias="IMAP_PASSWORD")
 
     # CORS & Frontend
     frontend_origin: str = Field(default="http://localhost:5173", alias="FRONTEND_ORIGIN")

@@ -337,11 +337,10 @@ class EmailService:
         return [_serialize(email) for email in emails]
 
     async def unread_count(self, user_id: int) -> int:
-        emails = await self.repo.list_for_user(user_id, unread_only=True)
-        return len(emails)
+        return await self.repo.unread_count(user_id)
 
     async def get(self, email_id: int, user_id: int) -> dict | None:
-        email = await self.repo.get_by_id(email_id, user_id)
+        email = await self.repo.get(email_id, user_id)
         return _serialize(email) if email else None
 
     async def create(self, user_id: int, payload: EmailCreate) -> dict:
@@ -1069,11 +1068,25 @@ class EmailService:
         from email.header import decode_header
         import asyncio
 
-        user_email = settings.smtp_user
-        password = settings.smtp_password.replace(" ", "") if settings.smtp_password else ""
+        # ── Resolve IMAP credentials ──────────────────────────────────────────────
+        # Priority: IMAP_USER/IMAP_PASSWORD (set when using Brevo for outbound)
+        #           → SMTP_USER/SMTP_PASSWORD (classic Gmail SMTP path)
+        user_email = (settings.imap_user or settings.smtp_user or "").strip()
+        password = (
+            (settings.imap_password or settings.smtp_password or "").replace(" ", "")
+        )
 
         if not user_email or not password:
-            return {"synced": False, "count": 0, "message": "IMAP credentials not configured in settings."}
+            return {
+                "synced": False,
+                "count": 0,
+                "message": (
+                    "Gmail IMAP credentials not configured. "
+                    "Add IMAP_USER (your Gmail address) and IMAP_PASSWORD (Gmail App Password — "
+                    "generate one at https://myaccount.google.com/apppasswords) to your .env file."
+                ),
+            }
+
 
         app_res = await self.repo.session.execute(
             select(Application).where(Application.user_id == user_id)

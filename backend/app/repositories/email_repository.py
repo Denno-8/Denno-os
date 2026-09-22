@@ -23,15 +23,19 @@ class EmailRepository:
         )
         return result.scalars().first()
 
-    async def list_for_user(
-        self, user_id: int, category: str | None = None, skip: int = 0, limit: int = 100
-    ) -> list[Email]:
+    get_by_id = get
 
-        """List emails for a user, optionally filtered by category."""
+    async def list_for_user(
+        self, user_id: int, category: str | None = None, unread_only: bool = False, skip: int = 0, limit: int = 100
+    ) -> list[Email]:
+        """List emails for a user, optionally filtered by category or unread status."""
         query = select(Email).where(Email.user_id == user_id)
         
         if category:
             query = query.where(Email.category == category)
+
+        if unread_only:
+            query = query.where(Email.read == False)  # noqa: E712
         
         query = query.order_by(Email.created_at.desc()).offset(skip).limit(limit)
         result = await self.session.execute(query)

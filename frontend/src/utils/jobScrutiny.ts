@@ -43,6 +43,40 @@ export function analyzeJobApplicationChannel(item: {
 
   const finalEmail = (rawEmail && rawEmail.includes("@")) ? rawEmail : foundDescEmail;
 
+  // ── PRIORITY 1: Explicit apply_method always wins ──────────────────────────
+  // When a user explicitly chose "website" or "portal", we NEVER override this
+  // to "email" even if a recruiter_email exists on the record (e.g., stored for
+  // follow-up purposes but the actual application was submitted via portal).
+  if (item.apply_method === "website" || item.apply_method === "portal") {
+    const platformHint = _extractPortalPlatformFromUrl(portalUrl);
+    return {
+      channel: "website",
+      targetEmail: finalEmail,
+      portalUrl,
+      reason: platformHint
+        ? `Application submitted via ${platformHint} portal. ATS screening will process your CV automatically.`
+        : portalUrl
+        ? `Application submitted via official web portal. ATS screening will process your CV automatically.`
+        : "Official Web Application Portal — application entered and tracked manually.",
+      isEmailVerified: false,
+    };
+  }
+
+  // ── PRIORITY 2: Explicit email apply_method ────────────────────────────────
+  if (item.apply_method === "email") {
+    return {
+      channel: "email",
+      targetEmail: finalEmail || "careers@company.com",
+      portalUrl,
+      reason: finalEmail
+        ? `Direct Email Application dispatched to recruiter (${finalEmail}). Bypasses ATS portal — recruiter reads directly.`
+        : "Direct Email Application — application dispatched to recruiter inbox.",
+      isEmailVerified: !!finalEmail && !finalEmail.includes("example.com"),
+    };
+  }
+
+  // ── PRIORITY 3: Infer from signals when apply_method is not set ────────────
+
   // Key phrases indicating explicit email application instructions
   const emailPhrases = [
     "apply via email",
@@ -59,17 +93,7 @@ export function analyzeJobApplicationChannel(item: {
 
   const hasEmailPhrase = emailPhrases.some((phrase) => descText.toLowerCase().includes(phrase));
 
-  if (item.apply_method === "website" || item.apply_method === "portal") {
-    return {
-      channel: "website",
-      targetEmail: finalEmail,
-      portalUrl,
-      reason: "Official Web Application Portal selected for online submission.",
-      isEmailVerified: false,
-    };
-  }
-
-  if (item.apply_method === "email" || finalEmail || hasEmailPhrase) {
+  if (finalEmail || hasEmailPhrase) {
     return {
       channel: "email",
       targetEmail: finalEmail || "careers@company.com",
@@ -81,13 +105,62 @@ export function analyzeJobApplicationChannel(item: {
     };
   }
 
+  // ── PRIORITY 4: Default to website / portal ────────────────────────────────
   return {
     channel: "website",
     targetEmail: finalEmail,
     portalUrl,
-    reason: "Standard application entry.",
+    reason: "Standard portal application — submitted via employer career page or job board.",
     isEmailVerified: false,
   };
+}
+
+/**
+ * Detects the job portal platform name from a source URL for display purposes.
+ */
+export function _extractPortalPlatformFromUrl(url: string): string {
+  if (!url) return "";
+  const lower = url.toLowerCase();
+  if (lower.includes("linkedin.com")) return "LinkedIn";
+  if (lower.includes("myjobmag")) return "MyJobMag";
+  if (lower.includes("brightermonday")) return "BrighterMonday";
+  if (lower.includes("fuzu.com")) return "Fuzu";
+  if (lower.includes("glassdoor.com")) return "Glassdoor";
+  if (lower.includes("indeed.com")) return "Indeed";
+  if (lower.includes("jobwebkenya")) return "JobWebKenya";
+  if (lower.includes("pigiame.co.ke")) return "PigiMe";
+  if (lower.includes("greenhouse.io")) return "Greenhouse ATS";
+  if (lower.includes("workday.com") || lower.includes("myworkday")) return "Workday ATS";
+  if (lower.includes("lever.co")) return "Lever ATS";
+  if (lower.includes("icims.com")) return "iCIMS ATS";
+  if (lower.includes("bamboohr.com")) return "BambooHR";
+  if (lower.includes("smartrecruiters.com")) return "SmartRecruiters";
+  if (lower.includes("jobvite.com")) return "Jobvite";
+  return "";
+}
+
+/**
+ * Maps a known portal platform name to its common ATS system.
+ */
+export function getPortalAtsSystem(platform: string): string {
+  const map: Record<string, string> = {
+    "LinkedIn": "LinkedIn ATS / Native",
+    "Greenhouse ATS": "Greenhouse",
+    "Workday ATS": "Workday",
+    "Lever ATS": "Lever",
+    "iCIMS ATS": "iCIMS",
+    "BambooHR": "BambooHR",
+    "SmartRecruiters": "SmartRecruiters",
+    "Jobvite": "Jobvite",
+    "MyJobMag": "Custom / Email Forward",
+    "BrighterMonday": "Custom Portal",
+    "Fuzu": "Fuzu Native",
+    "Glassdoor": "Employer ATS (varies)",
+    "Indeed": "Indeed Apply / Employer ATS",
+    "JobWebKenya": "Custom Portal",
+    "PigiMe": "Custom Portal",
+  };
+  return map[platform] || "Unknown / Custom ATS";
 }
 
 /**

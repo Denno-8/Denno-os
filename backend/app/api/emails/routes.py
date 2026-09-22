@@ -19,15 +19,15 @@ async def list_emails(
     unread_only: bool = Query(default=False),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
-    return await service.list(user_id, unread_only, skip, limit)
+    return await service.list(user_id, unread_only=unread_only, skip=skip, limit=limit)
 
 
 @router.get("/unread-count", response_model=int)
 async def unread_count(
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
     return await service.unread_count(user_id)
@@ -36,7 +36,7 @@ async def unread_count(
 @router.post("", response_model=EmailOut, status_code=status.HTTP_201_CREATED)
 async def create_email(
     payload: EmailCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
     return await service.create(user_id, payload)
@@ -46,7 +46,7 @@ async def create_email(
 async def update_email(
     email_id: int,
     payload: EmailUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
     doc = await service.update(email_id, user_id, payload)
@@ -58,7 +58,7 @@ async def update_email(
 @router.delete("/{email_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_email(
     email_id: int,
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
     deleted = await service.delete(email_id, user_id)
@@ -74,15 +74,11 @@ class ClassifyEmailPayload(BaseModel):
 
 @router.post("/sync-inbox")
 async def sync_inbox(
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: EmailService = Depends(get_service),
 ):
     """Syncs/parses incoming recruiter emails and auto-updates matching active Applications."""
-    try:
-        uid = int(user_id)
-    except Exception:
-        uid = 1
-    return await service.sync_inbound_responses(uid)
+    return await service.sync_inbound_responses(user_id)
 
 
 @router.post("/classify")
