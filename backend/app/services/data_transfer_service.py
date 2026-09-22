@@ -186,6 +186,9 @@ class DataTransferService:
 
     def to_pdf_bytes(self, records: list[dict], resource: str) -> bytes:
         """Serialize records to a PDF table using ReportLab."""
+        import html
+        from reportlab.lib.styles import ParagraphStyle
+
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
             buf,
@@ -208,36 +211,70 @@ class DataTransferService:
             doc.build(elements)
             return buf.getvalue()
 
-        # Flatten
+        # Collect unique fieldnames in order
         fieldnames: list[str] = []
+        for r in records:
+            for k in r.keys():
+                if k not in fieldnames:
+                    fieldnames.append(k)
+
+        header_style = ParagraphStyle(
+            "TableHeader",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=7,
+            leading=9,
+            textColor=colors.white,
+        )
+
+        cell_style = ParagraphStyle(
+            "TableCell",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=6.5,
+            leading=8.5,
+            textColor=colors.HexColor("#1e293b"),
+        )
+
         flat_rows: list[list] = []
         for r in records:
             row: list = []
-            for k, v in r.items():
-                if k not in fieldnames:
-                    fieldnames.append(k)
-                row.append(str(json.dumps(v) if isinstance(v, (list, dict)) else (v if v is not None else "")))
+            for k in fieldnames:
+                v = r.get(k)
+                if isinstance(v, (list, dict)):
+                    val_str = json.dumps(v)
+                elif v is not None:
+                    val_str = str(v)
+                else:
+                    val_str = ""
+
+                # Truncate extremely long blob text (e.g. 10KB parsed_content in table cells)
+                if len(val_str) > 200:
+                    val_str = val_str[:200] + "…"
+
+                safe_val = html.escape(val_str).replace("\n", "<br/>")
+                row.append(Paragraph(safe_val or "-", cell_style))
             flat_rows.append(row)
 
-        header = [Paragraph(f"<b>{h}</b>", styles["Normal"]) for h in fieldnames]
+        header = [Paragraph(f"<b>{html.escape(h)}</b>", header_style) for h in fieldnames]
         table_data = [header] + flat_rows
 
         col_count = len(fieldnames)
         usable_width = landscape(A4)[0] - 2 * cm
-        col_width = usable_width / col_count
+        col_width = usable_width / max(1, col_count)
 
         t = Table(table_data, colWidths=[col_width] * col_count, repeatRows=1)
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A5F")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F7FB")]),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
         ]))
         elements.append(t)
 

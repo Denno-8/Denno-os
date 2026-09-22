@@ -60,7 +60,7 @@ def _require_admin_for_public_resource(resource: str, payload: dict) -> None:
 async def export_resource(
     resource: str,
     format: str = Query(default="json", pattern="^(json|csv|excel|pdf)$"),
-    user_id: str = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id),
     service: DataTransferService = Depends(get_service),
 ):
     """
