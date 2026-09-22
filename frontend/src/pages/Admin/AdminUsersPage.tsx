@@ -431,9 +431,10 @@ function EditUserModal({ user, onClose, onSaved }: EditModalProps) {
           {tab === "password" && (
             <>
               <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl">
-                <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                  ⚠️ This will immediately reset the user's password. They will need to use the new password to log in.
-                </p>
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    This will immediately reset the user's password. They will need to use the new password to log in.
+                  </p>
               </div>
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">New Password</label>

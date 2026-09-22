@@ -493,12 +493,12 @@ ${coverLetter}`;
                     {/* Sub-Tab Navigation for Portal Forms */}
                     <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900/70 p-1 rounded-xl text-xs overflow-x-auto">
                       {[
-                        { id: "audit", label: "📊 AI Scrutiny Audit" },
-                        { id: "personal", label: "👤 Personal & Socials" },
-                        { id: "education", label: "🎓 Education & Experience" },
-                        { id: "legal", label: "💼 Eligibility & Kenya Disclosures" },
-                        { id: "screening", label: "❓ AI Screening Answers" },
-                        { id: "eeoc", label: "🛡️ EEOC Disclosures" },
+                        { id: "audit",     label: "AI Scrutiny Audit" },
+                        { id: "personal",  label: "Personal & Socials" },
+                        { id: "education", label: "Education & Experience" },
+                        { id: "legal",     label: "Eligibility & Disclosures" },
+                        { id: "screening", label: "AI Screening Answers" },
+                        { id: "eeoc",      label: "EEOC Disclosures" },
                       ].map((tab) => (
                         <button
                           key={tab.id}

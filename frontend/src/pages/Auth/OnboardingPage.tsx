@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Hand, User, Target, Trophy, Rocket, Briefcase, FileText, PenLine, Sparkles, CheckCircle } from "lucide-react";
 import apiClient from "../../services/api";
 
 // ── Step definitions ──────────────────────────────────────────────────────────
@@ -198,10 +199,11 @@ export default function OnboardingPage() {
               borderRadius: 14,
               background: "linear-gradient(135deg, #6366f1, #3b82f6)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 22, marginBottom: "1rem",
+              marginBottom: "1rem",
               boxShadow: "0 8px 24px rgba(99,102,241,0.35)",
+              color: "#fff",
             }}>
-              {step === "welcome" ? "👋" : step === "profile" ? "👤" : step === "career" ? "🎯" : step === "goals" ? "🏆" : "🚀"}
+              {step === "welcome" ? <Hand size={22} /> : step === "profile" ? <User size={22} /> : step === "career" ? <Target size={22} /> : step === "goals" ? <Trophy size={22} /> : <Rocket size={22} />}
             </div>
             <h1 style={{
               margin: 0, fontSize: "1.6rem", fontWeight: 700,
@@ -220,7 +222,9 @@ export default function OnboardingPage() {
 
           {step === "welcome" && (
             <div style={{ textAlign: "center", padding: "1rem 0" }}>
-              <div style={{ fontSize: "3.5rem", marginBottom: "1.5rem", lineHeight: 1 }}>🎉</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
+                <Sparkles size={56} style={{ color: "#818cf8" }} />
+              </div>
               <p style={{ color: "#94a3b8", lineHeight: 1.7, fontSize: "0.95rem", margin: 0 }}>
                 Denno is your AI-powered career intelligence platform. In the next few steps,
                 we'll set up your profile so you can track applications, tailor your CV,
@@ -372,15 +376,15 @@ export default function OnboardingPage() {
               </h2>
               <p style={{ color: "#64748b", lineHeight: 1.7, fontSize: "0.9rem", margin: 0 }}>
                 Start by browsing the job board, importing your CV, or logging your first application.
-                Denno's AI will keep your career on track 🚀
+                Denno's AI will keep your career on track.
               </p>
               <div style={{
                 display: "flex", gap: 12, marginTop: "1.75rem", justifyContent: "center", flexWrap: "wrap",
               }}>
                 {[
-                  { label: "Browse Jobs", path: "/jobs", icon: "💼" },
-                  { label: "Upload CV", path: "/cv", icon: "📄" },
-                  { label: "Add Application", path: "/applications", icon: "✏️" },
+                  { label: "Browse Jobs", path: "/jobs", icon: <Briefcase size={16} /> },
+                  { label: "Upload CV", path: "/cv", icon: <FileText size={16} /> },
+                  { label: "Add Application", path: "/applications", icon: <PenLine size={16} /> },
                 ].map((cta) => (
                   <button
                     key={cta.path}
@@ -400,7 +404,7 @@ export default function OnboardingPage() {
                       (e.currentTarget as HTMLButtonElement).style.background = "rgba(99,102,241,0.12)";
                     }}
                   >
-                    <span>{cta.icon}</span> {cta.label}
+                    {cta.icon} {cta.label}
                   </button>
                 ))}
               </div>

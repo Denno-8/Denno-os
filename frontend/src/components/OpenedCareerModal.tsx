@@ -159,7 +159,7 @@ export default function OpenedCareerModal({ isOpen, onClose }: OpenedCareerModal
                   : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               }`}
             >
-              🌐 Remote Only ({remoteJobs.length})
+              <Globe size={13} className="inline-block mr-1" /> Remote Only ({remoteJobs.length})
             </button>
           </div>
         </div>

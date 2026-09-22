@@ -239,7 +239,7 @@ export default function AdminScraperPage() {
         <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm font-semibold shadow-sm">
           <CheckCircle2 size={18} className="shrink-0" />
           <span>
-            ✅ Sync complete — <strong>{syncResult.added} new jobs added</strong>
+            Sync complete — <strong>{syncResult.added} new jobs added</strong>
             {syncResult.expired > 0 ? `, ${syncResult.expired} expired jobs swept.` : "."}
           </span>
         </div>

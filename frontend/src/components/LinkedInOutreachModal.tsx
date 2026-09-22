@@ -18,7 +18,7 @@ const TEMPLATES = [
   },
   {
     id: "recruiter_pitch",
-    name: "💼 Recruiter / InMail Pitch",
+    name: "Recruiter / InMail Pitch",
     maxLength: 1900,
     text: (name: string, company: string) =>
       `Hi ${name},\n\nI hope you're having a great week! I'm reaching out because I've been closely following ${company || "tech engineering opportunities"} and am really impressed by the team's work.\n\nI'm a Software Engineer experienced in Full-Stack Development (React, TypeScript, Python/FastAPI, PostgreSQL, & Cloud APIs). I'm currently exploring software & tech engineering roles where I can deliver high-impact features.\n\nIf you have a moment, I'd welcome a quick conversation or connection. Thank you for your time!\n\nBest regards,\nDennis Kibet`,
@@ -32,7 +32,7 @@ const TEMPLATES = [
   },
   {
     id: "application_followup",
-    name: "🎯 Application Follow-up",
+    name: "Application Follow-up",
     maxLength: 1900,
     text: (name: string, company: string) =>
       `Hi ${name},\n\nI recently submitted my application for the software engineering position at ${company || "your company"}.\n\nGiven my hands-on experience building production software systems, I wanted to reach out directly to reiterate my strong interest in joining the team. Please let me know if there are any additional details I can provide!\n\nThank you, ${name}!`,

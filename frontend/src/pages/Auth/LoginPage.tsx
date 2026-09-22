@@ -425,7 +425,7 @@ export default function LoginPage() {
           {/* Title */}
           <div style={{ marginBottom:"18px" }}>
             <h2 style={{ fontSize:"26px", fontWeight:800, color: dark ? "#fff" : "#0f172a", letterSpacing:"-0.022em", marginBottom:"6px", lineHeight:1.2 }}>
-              {mode === "login"    && "Welcome back 👋"}
+              {mode === "login"    && "Welcome back"}
               {mode === "register" && "Join Denno"}
               {mode === "forgot"   && "Reset Password"}
               {mode === "reset"    && "Set New Password"}
@@ -580,7 +580,7 @@ export default function LoginPage() {
                 {mode === "forgot" && resetLink && (
                   <div style={{ marginTop: "4px", padding: "10px 12px", borderRadius: "9px", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.35)" }}>
                     <div style={{ fontSize: "11.5px", fontWeight: 700, color: "#92400e", marginBottom: "4px" }}>
-                      🛠 Dev mode — SMTP not configured. Use this link to test the reset flow:
+                      &#128295; Dev mode — SMTP not configured. Use this link to test the reset flow:
                     </div>
                     <a
                       href={resetLink}
