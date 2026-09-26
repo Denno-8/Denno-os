@@ -81,24 +81,25 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
 
-      # ── Email / SMTP ─────────────────────────────────────────────────────────
-      # REQUIRED for password reset emails to work.
-      # Gmail setup:
-      #   1. Enable 2-Step Verification on your Google account
-      #   2. Go to https://myaccount.google.com/apppasswords
-      #   3. Create an App Password → copy the 16-character code
-      #   4. SMTP_USER = yourname@gmail.com
-      #   5. SMTP_PASSWORD = 16-char app password (no spaces)
-      #   6. SMTP_FROM_EMAIL = SAME as SMTP_USER (Gmail requires this)
+      # ── Brevo (Outbound Applications over HTTPS port 443 — bypasses Render SMTP port blocks)
+      - key: BREVO_API_KEY
+        sync: false     # Get API key at https://app.brevo.com/settings/keys/api (xkeysib-...)
+      - key: BREVO_FROM_EMAIL
+        sync: false     # Verified sender email in Brevo (e.g. yourname@gmail.com)
+
+      # ── Gmail IMAP (Inbound Response Syncing — reads recruiter replies)
+      - key: IMAP_USER
+        sync: false     # Candidate's Gmail address (e.g. yourname@gmail.com)
+      - key: IMAP_PASSWORD
+        sync: false     # 16-char Gmail App Password from https://myaccount.google.com/apppasswords
+
+      # ── Email / SMTP (Direct fallback)
       - key: EMAILS_ENABLED
         value: true
       - key: SMTP_HOST
         value: smtp.gmail.com
-      # Port 465 = SSL/SMTPS (use_tls=True) — recommended for Gmail reliability
-      # Port 587 = STARTTLS — also works. Code auto-detects from port number.
       - key: SMTP_PORT
         value: 465
-      # Set these manually in Render dashboard (never commit credentials):
       - key: SMTP_USER
         sync: false     # e.g. yourname@gmail.com
       - key: SMTP_PASSWORD
@@ -107,8 +108,6 @@ services:
         sync: false     # MUST be same as SMTP_USER for Gmail
       - key: SMTP_FROM_NAME
         value: "Denno Career OS"
-      # Code auto-detects SSL from port (465=SSL, 587=STARTTLS)
-      # These are kept for documentation / override purposes only:
       - key: SMTP_USE_SSL
         value: true     # true when using port 465
       - key: SMTP_TLS

@@ -2173,26 +2173,37 @@ class RealJobAggregatorService:
 
         return jobs
 
-    async def fetch_from_linkedin(self, limit: int = 40) -> list[dict]:
+    async def fetch_from_linkedin(self, limit: int = 40, query: str | None = None, location: str | None = None) -> list[dict]:
         """
-        Fetch real software engineering, tech, and intern job postings from LinkedIn's
-        public guest job search endpoints (Kenya & Remote).
+        Fetch real software engineering, tech, cybersecurity, and intern job postings from LinkedIn's
+        public guest job search API endpoints (Kenya & Remote). Parses detailed job criteria,
+        skills, and requirements.
         """
         from bs4 import BeautifulSoup
         jobs = []
-        queries = [
-            ("software engineer", "Kenya"),
-            ("developer", "Kenya"),
-            ("intern", "Kenya"),
-            ("customer support", "Kenya"),
-            ("client support", "Kenya"),
-            ("data", "Kenya"),
-            ("full stack", "Remote"),
-        ]
+        seen_urls: set[str] = set()
+
+        if query:
+            queries = [(query, location or "Kenya")]
+        else:
+            queries = [
+                ("software engineer", "Kenya"),
+                ("developer", "Kenya"),
+                ("cybersecurity", "Kenya"),
+                ("data analyst", "Kenya"),
+                ("full stack", "Kenya"),
+                ("intern", "Kenya"),
+                ("python", "Kenya"),
+                ("cloud engineer", "Remote"),
+                ("frontend engineer", "Remote"),
+                ("backend engineer", "Remote"),
+            ]
+
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
+
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=headers) as client:
             for kw, loc in queries:
                 if len(jobs) >= limit:
@@ -2203,34 +2214,62 @@ class RealJobAggregatorService:
                     if res.status_code != 200:
                         continue
                     soup = BeautifulSoup(res.text, "html.parser")
-                    cards = soup.find_all("div", class_=re.compile(r"job-search-card"))
+                    cards = soup.find_all(["div", "li"], class_=re.compile(r"job-search-card|base-card"))
                     for card in cards:
                         if len(jobs) >= limit:
                             break
-                        title_el = card.find("h3", class_=re.compile(r"base-search-card__title"))
-                        company_el = card.find("h4", class_=re.compile(r"base-search-card__subtitle"))
+
+                        title_el = card.find(["h3", "h4"], class_=re.compile(r"base-search-card__title|job-search-card__title"))
+                        company_el = card.find(["h4", "h5", "a"], class_=re.compile(r"base-search-card__subtitle|job-search-card__subtitle"))
                         location_el = card.find("span", class_=re.compile(r"job-search-card__location"))
-                        link_el = card.find("a", class_=re.compile(r"base-card__full-link"))
+                        link_el = card.find("a", class_=re.compile(r"base-card__full-link|job-search-card__link"))
                         date_el = card.find("time")
 
                         if not title_el or not link_el:
                             continue
+
                         title = title_el.get_text(strip=True)
                         company_nm = company_el.get_text(strip=True) if company_el else "LinkedIn Employer"
-                        location_text = location_el.get_text(strip=True) if location_el else "Kenya"
-                        job_url = link_el["href"].split("?")[0] if "href" in link_el.attrs else ""
-                        if not job_url:
-                            continue
+                        location_text = location_el.get_text(strip=True) if location_el else loc
+                        raw_href = link_el.get("href", "")
+                        job_url = raw_href.split("?")[0] if raw_href else ""
 
-                        date_str = date_el["datetime"] if date_el and "datetime" in date_el.attrs else None
+                        if not job_url or job_url in seen_urls:
+                            continue
+                        seen_urls.add(job_url)
+
+                        date_str = date_el.get("datetime") if date_el and date_el.has_attr("datetime") else None
                         posted_at = _parse_date(date_str) if date_str else datetime.now(timezone.utc)
 
-                        mode = "Remote" if "remote" in location_text.lower() else "Hybrid" if "hybrid" in location_text.lower() else "Onsite"
-                        level = _detect_level(title, location_text)
-                        sal_min, sal_max = _salary_for_level(level)
-                        skills = _extract_skills_from_text(f"{title} {location_text} software engineering")
+                        # Extract LinkedIn Job ID if present
+                        job_id_match = re.search(r'/view/(?:[^/]+-)?(\d+)', job_url) or re.search(r'(\d{8,12})', job_url)
+                        job_id = job_id_match.group(1) if job_id_match else None
 
-                        desc = f"{level} level role at {company_nm} posted on LinkedIn ({location_text}). Requirements include proficiency in {', '.join(skills[:3]) or 'software engineering'}."
+                        detail_desc = ""
+                        # Fetch rich job posting details from LinkedIn guest posting API for top jobs
+                        if job_id and len(jobs) < 15:
+                            try:
+                                detail_url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
+                                d_res = await client.get(detail_url, timeout=4.0)
+                                if d_res.status_code == 200:
+                                    d_soup = BeautifulSoup(d_res.text, "html.parser")
+                                    markup = d_soup.find("div", class_=re.compile(r"show-more-less-html__markup|description__text"))
+                                    if markup:
+                                        detail_desc = _clean_html(markup.get_text(separator=" "))
+                            except Exception:
+                                pass
+
+                        combined_text = f"{title} {location_text} {detail_desc}".strip()
+                        mode = "Remote" if "remote" in location_text.lower() or "remote" in combined_text.lower() else "Hybrid" if "hybrid" in location_text.lower() else "Onsite"
+                        level = _detect_level(title, combined_text)
+                        sal_min, sal_max = _salary_for_level(level)
+
+                        skills = _extract_skills_from_text(combined_text)
+                        if not skills:
+                            skills = ["Python", "JavaScript", "React", "SQL", "Git"]
+
+                        desc = detail_desc[:1200] if detail_desc else f"{level} position at {company_nm} posted on LinkedIn ({location_text}). Skills: {', '.join(skills[:4])}."
+                        reqs = _default_requirements(level, skills)
 
                         jobs.append({
                             "title": title,
@@ -2242,10 +2281,10 @@ class RealJobAggregatorService:
                             "salary_min": sal_min,
                             "salary_max": sal_max,
                             "currency": "KES",
-                            "required_skills": skills[:6],
-                            "requirements": _default_requirements(level, skills),
+                            "required_skills": list(dict.fromkeys(skills))[:6],
+                            "requirements": reqs,
                             "posted_at": posted_at,
-                            "deadline": extract_deadline_from_text(desc, posted_at),
+                            "deadline": extract_deadline_from_text(desc, posted_at, fallback_days=30),
                         })
                 except Exception as exc:
                     logger.warning("LinkedIn guest job search failed for kw=%s, loc=%s: %s", kw, loc, exc)

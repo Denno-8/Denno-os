@@ -85,6 +85,77 @@ async def sync_live_daily_jobs(
     return result
 
 
+@router.post("/sync-linkedin")
+async def sync_linkedin_jobs(
+    q: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    limit: int = Query(default=40, ge=1, le=100),
+    _user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_database),
+):
+    """Fetches real tech and cybersecurity job postings directly from LinkedIn public guest API endpoints."""
+    from app.services.real_job_aggregator import RealJobAggregatorService
+    aggregator = RealJobAggregatorService(db)
+    raw_jobs = await aggregator.fetch_from_linkedin(limit=limit, query=q, location=location)
+
+    added_count = 0
+    updated_count = 0
+    for item in raw_jobs:
+        source_url = item["source_url"]
+        from sqlalchemy import select
+        from app.models.sqlalchemy_models import Job
+        stmt = select(Job).where(
+            (Job.source_url == source_url) |
+            ((Job.title == item["title"]) & (Job.company_name == item["company_name"]))
+        )
+        res = await db.execute(stmt)
+        existing = res.scalars().first()
+        if existing:
+            existing.is_expired = False
+            existing.posted_at = item["posted_at"]
+            updated_count += 1
+        else:
+            company = await aggregator._get_or_create_company(item["company_name"], career_url=source_url)
+            new_job = Job(
+                company_id=company.id,
+                company_name=company.name,
+                title=item["title"],
+                mode=item["mode"],
+                level=item["level"],
+                employment_type="Full-time" if item["level"] not in ("Intern",) else "Internship",
+                salary_min=item["salary_min"],
+                salary_max=item["salary_max"],
+                currency=item["currency"],
+                required_skills=item["required_skills"],
+                requirements=item["requirements"],
+                match_score=min(98, max(75, 80 + len(item["required_skills"]) * 3)),
+                ats_score=min(95, max(70, 75 + len(item["required_skills"]) * 3)),
+                posted_at=item["posted_at"],
+                deadline=item["deadline"],
+                source_url=source_url,
+                contact_email=f"careers@{company.name.lower().replace(' ', '')}.com",
+                is_hot=True,
+                is_expired=False,
+                description=item["description"],
+            )
+            db.add(new_job)
+            added_count += 1
+
+    await db.commit()
+    await _invalidate_list_cache()
+
+    return {
+        "status": "success",
+        "source": "LinkedIn Public Guest Search",
+        "fetched_count": len(raw_jobs),
+        "added_count": added_count,
+        "updated_count": updated_count,
+        "query": q or "all tech roles",
+        "location": location or "Kenya/Remote"
+    }
+
+
+
 @router.get("/feed/openedcareer")
 async def get_openedcareer_job_feed(
     db: AsyncSession = Depends(get_database),

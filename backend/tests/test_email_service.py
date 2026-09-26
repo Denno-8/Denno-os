@@ -76,7 +76,61 @@ async def test_sync_inbound_responses_unconfigured(mock_db):
     with patch("app.services.email_service.settings") as mock_settings:
         mock_settings.smtp_user = ""
         mock_settings.smtp_password = ""
+        mock_settings.imap_user = ""
+        mock_settings.imap_password = ""
 
         res = await service.sync_inbound_responses(1)
         assert res["synced"] is False
         assert "not configured" in res["message"]
+
+
+@pytest.mark.asyncio
+async def test_process_inbound_email_matching(mock_db):
+    service = EmailService(mock_db)
+
+    # Mock Application query
+    mock_app = MagicMock()
+    mock_app.id = 42
+    mock_app.company_name = "Safaricom PLC"
+    mock_app.role = "Senior Software Engineer"
+    mock_app.recruiter_email = "recruiter@safaricom.et"
+    mock_app.stage = "Applied"
+
+    mock_exec_res = MagicMock()
+    mock_exec_res.scalars.return_value.all.return_value = [mock_app]
+    mock_exec_res.scalars.return_value.first.return_value = mock_app
+    mock_db.execute = AsyncMock(return_value=mock_exec_res)
+    mock_db.commit = AsyncMock()
+
+    mock_created_email = MagicMock()
+    mock_created_email.id = 200
+    mock_created_email.user_id = 1
+    mock_created_email.from_name = "recruiter@safaricom.et (Safaricom PLC)"
+    mock_created_email.subject = "Invitation to Technical Interview"
+    mock_created_email.body = "We would like to invite you to an interview on Google Meet: https://meet.google.com/abc-defg-hij"
+    mock_created_email.category = "Technical Interview"
+    mock_created_email.read = False
+    mock_created_email.recommended_action = "Confirm interview slot"
+    mock_created_email.application_id = 42
+    mock_created_email.source = "inbound_process"
+    mock_created_email.created_at = "2026-09-26T12:00:00"
+    mock_created_email.updated_at = "2026-09-26T12:00:00"
+
+    service.repo.create = AsyncMock(return_value=mock_created_email)
+
+    with patch("app.services.notification_service.NotificationService.create", new_callable=AsyncMock):
+        res = await service.process_inbound_email(
+            user_id=1,
+            sender_name="Safaricom HR",
+            sender_email="recruiter@safaricom.et",
+            subject="Invitation to Technical Interview",
+            body="We would like to invite you to an interview on Google Meet: https://meet.google.com/abc-defg-hij",
+            application_id=42
+        )
+
+        assert res["email"] is not None
+        assert res["application"]["id"] == "42"
+        assert res["application"]["company_name"] == "Safaricom PLC"
+        assert res["stage_updated"] is True
+        assert res["classified"]["category"] == "Technical Interview"
+

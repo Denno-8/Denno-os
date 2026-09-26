@@ -249,3 +249,34 @@ async def test_openedcareer_tech_fetch():
         assert jobs[0]["title"] == "Senior ICT Systems Officer"
         assert jobs[0]["company_name"] == "Safaricom PLC"
         assert jobs[0]["currency"] == "KES"
+
+
+@pytest.mark.asyncio
+async def test_linkedin_fetch():
+    html_content = """
+    <div class="job-search-card">
+        <h3 class="base-search-card__title">Senior Software Engineer</h3>
+        <h4 class="base-search-card__subtitle">Safaricom PLC</h4>
+        <span class="job-search-card__location">Nairobi, Kenya</span>
+        <a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/9988776655/">Link</a>
+        <time datetime="2026-09-25">1 day ago</time>
+    </div>
+    """
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = html_content
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.get.return_value = mock_response
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        mock_session = AsyncMock()
+        service = RealJobAggregatorService(mock_session)
+        jobs = await service.fetch_from_linkedin(limit=5, query="software engineer", location="Kenya")
+        assert len(jobs) >= 1
+        assert jobs[0]["title"] == "Senior Software Engineer"
+        assert jobs[0]["company_name"] == "Safaricom PLC"
+        assert jobs[0]["currency"] == "KES"
+

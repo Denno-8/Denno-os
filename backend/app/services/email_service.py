@@ -1057,6 +1057,166 @@ class EmailService:
             "role_title": role_title,
         }
 
+    async def process_inbound_email(
+        self,
+        user_id: int,
+        sender_name: str,
+        sender_email: str,
+        subject: str,
+        body: str,
+        application_id: int | None = None
+    ) -> dict:
+        """
+        Processes an incoming recruiter email (either pasted manually or synced via inbox API).
+        Classifies intent, identifies target job application, updates application stage,
+        creates interview/calendar events if needed, generates in-app notifications,
+        and saves the email record.
+        """
+        from app.services.email_classifier_service import EmailClassifierService
+        from app.services.notification_service import NotificationService
+        from app.schemas.notification import NotificationCreate
+
+        classified = EmailClassifierService.classify_email(subject, body, sender_email)
+        recommended_stage = classified.get("recommended_stage")
+        category = classified.get("category", "Application Received")
+        action = classified.get("recommended_action", "Review recruiter response.")
+        extracted_data = classified.get("extracted_data") or {}
+
+        # Resolve target Application
+        target_app = None
+        if application_id:
+            app_res = await self.repo.session.execute(
+                select(Application).where(Application.id == application_id, Application.user_id == user_id)
+            )
+            target_app = app_res.scalars().first()
+
+        if not target_app:
+            # Match by recruiter email or company name / role
+            apps_res = await self.repo.session.execute(
+                select(Application).where(Application.user_id == user_id)
+            )
+            all_apps = apps_res.scalars().all()
+            combined_text = f"{subject} {body} {sender_email} {sender_name}".lower()
+
+            for app in all_apps:
+                if app.recruiter_email and app.recruiter_email.lower() in sender_email.lower():
+                    target_app = app
+                    break
+
+            if not target_app:
+                for app in all_apps:
+                    comp = (app.company_name or "").lower()
+                    role = (app.role or "").lower()
+                    comp_word = comp.split()[0] if comp else ""
+                    if (comp and comp in combined_text) or (len(comp_word) > 3 and comp_word in combined_text) or (len(role) > 4 and role in combined_text):
+                        target_app = app
+                        break
+
+        stage_updated = False
+        if target_app and recommended_stage:
+            target_app.stage = recommended_stage
+            stage_updated = True
+
+        # Create Email record in DB
+        from_display = sender_name or sender_email or "Recruiter Response"
+        if target_app:
+            from_display = f"{from_display} ({target_app.company_name})"
+
+        email_doc = {
+            "user_id": user_id,
+            "from_name": from_display[:255],
+            "subject": subject[:255],
+            "category": category,
+            "body": body,
+            "read": False,
+            "recommended_action": action,
+            "application_id": target_app.id if target_app else None,
+            "source": "inbound_process"
+        }
+        created_email = await self.repo.create(email_doc)
+
+        interview_created = False
+        # Create Interview & Calendar event if stage is interview or assessment
+        if target_app and recommended_stage:
+            stage_str = str(recommended_stage).lower()
+            if any(k in stage_str for k in ["interview", "technical", "hr", "final", "assessment"]):
+                meeting_link = extracted_data.get("meeting_link") or "Online Video Call"
+                sched_dt = datetime.now(timezone.utc) + timedelta(days=3)
+                ev_date = date.today() + timedelta(days=3)
+
+                existing_int = await self.repo.session.execute(
+                    select(Interview).where(
+                        Interview.user_id == user_id,
+                        Interview.application_id == target_app.id,
+                        Interview.status == "scheduled"
+                    )
+                )
+                if not existing_int.scalars().first():
+                    new_interview = Interview(
+                        user_id=user_id,
+                        application_id=target_app.id,
+                        type=category if "Interview" in category else "Technical",
+                        scheduled_at=sched_dt,
+                        location=meeting_link,
+                        status="scheduled",
+                        post_interview_notes=f"Inbound recruiter email: {subject}"
+                    )
+                    self.repo.session.add(new_interview)
+
+                    new_cal_event = CalendarEvent(
+                        user_id=user_id,
+                        application_id=target_app.id,
+                        title=f"📅 Interview: {target_app.role} at {target_app.company_name}",
+                        type="Interview",
+                        date=ev_date,
+                        time="10:00 AM",
+                        color="blue"
+                    )
+                    self.repo.session.add(new_cal_event)
+                    interview_created = True
+
+        # Notification Creation
+        notif_created = False
+        try:
+            notif_svc = NotificationService(self.repo.session)
+            if target_app:
+                n_title = f"📬 Recruiter Response: {target_app.company_name} ({category})"
+                n_msg = f"{subject}. Stage updated to '{target_app.stage.value if hasattr(target_app.stage, 'value') else target_app.stage}' for {target_app.role}."
+                if extracted_data.get("meeting_link"):
+                    n_msg += " Meeting link detected."
+            else:
+                n_title = f"📬 Inbound Email Received: {category}"
+                n_msg = f"Subject: {subject}. Intent: {category}."
+
+            await notif_svc.create(user_id, NotificationCreate(
+                title=n_title,
+                message=n_msg,
+                type="email",
+                link="/emails"
+            ))
+            notif_created = True
+        except Exception as e:
+            print(f"Notification error in process_inbound_email: {e}")
+
+        import inspect
+        commit_res = self.repo.session.commit()
+        if inspect.isawaitable(commit_res):
+            await commit_res
+
+        return {
+            "email": _serialize(created_email),
+            "application": {
+                "id": str(target_app.id) if target_app else None,
+                "company_name": target_app.company_name if target_app else None,
+                "role": target_app.role if target_app else None,
+                "stage": str(target_app.stage.value if hasattr(target_app.stage, 'value') else target_app.stage) if target_app else None,
+            } if target_app else None,
+            "classified": classified,
+            "stage_updated": stage_updated,
+            "interview_created": interview_created,
+            "notification_created": notif_created
+        }
+
     async def sync_inbound_responses(self, user_id: int) -> dict:
         """
         Connects to candidate's Gmail via IMAP, fetches recent recruiter response emails,
@@ -1069,12 +1229,10 @@ class EmailService:
         import asyncio
 
         # ── Resolve IMAP credentials ──────────────────────────────────────────────
-        # Priority: IMAP_USER/IMAP_PASSWORD (set when using Brevo for outbound)
-        #           → SMTP_USER/SMTP_PASSWORD (classic Gmail SMTP path)
-        user_email = (settings.imap_user or settings.smtp_user or "").strip()
-        password = (
-            (settings.imap_password or settings.smtp_password or "").replace(" ", "")
-        )
+        raw_u = getattr(settings, "imap_user", None) or getattr(settings, "smtp_user", None) or ""
+        raw_p = getattr(settings, "imap_password", None) or getattr(settings, "smtp_password", None) or ""
+        user_email = (raw_u if isinstance(raw_u, str) else "").strip()
+        password = (raw_p if isinstance(raw_p, str) else "").replace(" ", "")
 
         if not user_email or not password:
             return {
@@ -1087,19 +1245,12 @@ class EmailService:
                 ),
             }
 
-
-        app_res = await self.repo.session.execute(
-            select(Application).where(Application.user_id == user_id)
-        )
-        user_apps = app_res.scalars().all()
-        app_map = {app.company_name.lower(): app for app in user_apps}
-
         synced_count = 0
-        new_updates = []
+        fetched_messages = []
         imap_error_msg = None
 
         def _do_imap_sync():
-            nonlocal synced_count, imap_error_msg
+            nonlocal fetched_messages, imap_error_msg
             try:
                 try:
                     mail = IPv4IMAP4_SSL("imap.gmail.com", 993)
@@ -1157,41 +1308,11 @@ class EmailService:
                             if user_email and user_email.lower() in from_addr.lower():
                                 continue
 
-                            matched_app = None
-
-                            # 1. Match by recruiter email
-                            for app in user_apps:
-                                if app.recruiter_email and app.recruiter_email.lower() in from_addr.lower():
-                                    matched_app = app
-                                    break
-
-                            # 2. Match by company name or role title
-                            if not matched_app:
-                                for comp_name, app in app_map.items():
-                                    comp_clean = comp_name.split()[0]  # e.g. "coalition" from "Coalition Technologies"
-                                    if comp_name in combined_text or (len(comp_clean) > 3 and comp_clean in combined_text) or (app.role.lower() in combined_text and len(app.role) > 4):
-                                        matched_app = app
-                                        break
-
-                            if matched_app:
-                                from app.services.email_classifier_service import EmailClassifierService
-                                classified = EmailClassifierService.classify_email(subject, body, from_addr)
-
-                                new_stage = classified.get("recommended_stage")
-                                category = classified.get("category", "Application Received")
-                                action = classified.get("recommended_action", "Review recruiter email.")
-
-                                synced_count += 1
-                                new_updates.append({
-                                    "app": matched_app,
-                                    "subject": subject,
-                                    "from": from_addr,
-                                    "body": body[:800],
-                                    "new_stage": new_stage,
-                                    "category": category,
-                                    "action": action,
-                                    "extracted_data": classified.get("extracted_data") or {}
-                                })
+                            fetched_messages.append({
+                                "from_addr": from_addr,
+                                "subject": subject,
+                                "body": body
+                            })
 
                 mail.logout()
             except Exception as e:
@@ -1207,82 +1328,21 @@ class EmailService:
                 "message": f"Gmail IMAP connection notice: {imap_error_msg}."
             }
 
-        for item in new_updates:
-            app = item["app"]
-            if item["new_stage"] and app.stage != item["new_stage"]:
-                app.stage = item["new_stage"]
-
-            doc = {
-                "user_id": user_id,
-                "from_name": item["from"][:255],
-                "subject": item["subject"][:255],
-                "category": item["category"],
-                "body": item["body"],
-                "read": False,
-                "recommended_action": item["action"],
-                "application_id": app.id,
-                "source": "imap_sync"
-            }
-            await self.repo.create(doc)
-
-            # ── Automatically create Interview & Calendar Event if Interview or Assessment stage ──
-            stage_str = str(item["new_stage"] or "").lower()
-            if any(k in stage_str for k in ["interview", "technical", "hr", "final", "assessment"]):
-                ext_data = item.get("extracted_data") or {}
-                meeting_link = ext_data.get("meeting_link") or "Online Video Call"
-
-                sched_dt = datetime.now(timezone.utc) + timedelta(days=3)
-                ev_date = date.today() + timedelta(days=3)
-
-                existing_int = await self.repo.session.execute(
-                    select(Interview).where(
-                        Interview.user_id == user_id,
-                        Interview.application_id == app.id,
-                        Interview.status == "scheduled"
-                    )
-                )
-                if not existing_int.scalars().first():
-                    new_interview = Interview(
-                        user_id=user_id,
-                        application_id=app.id,
-                        type=item["category"] if "Interview" in item["category"] else "Technical",
-                        scheduled_at=sched_dt,
-                        location=meeting_link,
-                        status="scheduled",
-                        post_interview_notes=f"Captured from recruiter email: {item['subject']}"
-                    )
-                    self.repo.session.add(new_interview)
-
-                    new_cal_event = CalendarEvent(
-                        user_id=user_id,
-                        application_id=app.id,
-                        title=f"📅 Interview: {app.role} at {app.company_name}",
-                        type="Interview",
-                        date=ev_date,
-                        time="10:00 AM",
-                        color="blue"
-                    )
-                    self.repo.session.add(new_cal_event)
-
-            try:
-                from app.services.notification_service import NotificationService
-                from app.schemas.notification import NotificationCreate
-                notif_svc = NotificationService(self.repo.session)
-                await notif_svc.create(user_id, NotificationCreate(
-                    title=f"📬 Recruiter Update from {app.company_name}!",
-                    message=f"Received: {item['subject']}. Stage updated to {app.stage}.",
-                    type="application",
-                    link="/applications"
-                ))
-            except Exception:
-                pass
-
-        await self.repo.session.commit()
+        for item in fetched_messages:
+            res = await self.process_inbound_email(
+                user_id=user_id,
+                sender_name="",
+                sender_email=item["from_addr"],
+                subject=item["subject"],
+                body=item["body"]
+            )
+            if res and res.get("email"):
+                synced_count += 1
 
         return {
             "synced": True,
             "count": synced_count,
-            "message": f"Successfully synced inbox. Found {synced_count} recruiter response updates."
+            "message": f"Successfully synced inbox. Processed {synced_count} recruiter response emails."
         }
 
     async def batch_send_applications(self, user_id: int, application_ids: List[int]) -> dict:

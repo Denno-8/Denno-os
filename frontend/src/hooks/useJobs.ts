@@ -18,3 +18,16 @@ export function useApplyToJob() {
     },
   });
 }
+
+export function useSyncLinkedInJobs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ query, location }: { query?: string; location?: string } = {}) =>
+      jobsService.syncLinkedIn(query, location),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+

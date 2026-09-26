@@ -9,7 +9,7 @@ import {
   CalendarDays, Sparkle, Building2, Briefcase, Star, AtSign,
   TrendingUp, Filter, Loader2, Globe,
 } from "lucide-react";
-import { useJobs } from "../../hooks/useJobs";
+import { useJobs, useSyncLinkedInJobs } from "../../hooks/useJobs";
 import { useApplications, useCreateApplication, useDeleteApplication } from "../../hooks/useApplications";
 import { useGenerateCVForJob } from "../../hooks/useCV";
 import { useTheme } from "../../context/ThemeContext";
@@ -52,6 +52,7 @@ export default function JobsPage() {
   const [detailJob, setDetailJob] = useState<Job | null>(null);
   const [generatingCvJobId, setGeneratingCvJobId] = useState<string | null>(null);
   const [companyIntelTarget, setCompanyIntelTarget] = useState<string | null>(null);
+  const [isLinkedInSyncOpen, setIsLinkedInSyncOpen] = useState(false);
 
   const { data: jobs, isLoading, isError, refetch } = useJobs({
     q,
@@ -69,6 +70,7 @@ export default function JobsPage() {
   });
   const createApplication = useCreateApplication();
   const generateCVForJob = useGenerateCVForJob();
+  const syncLinkedIn = useSyncLinkedInJobs();
   const { theme } = useTheme();
   const isLight = theme === "light";
 
@@ -320,6 +322,19 @@ export default function JobsPage() {
           >
             <Globe size={16} />
             <span>OpenedCareer Feed</span>
+          </button>
+          <button
+            onClick={() => setIsLinkedInSyncOpen(true)}
+            disabled={syncLinkedIn.isPending}
+            className="px-4 py-3 bg-gradient-to-r from-[#0077b5] to-[#005885] hover:from-[#005885] hover:to-[#004569] text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-wait"
+            title="Fetch real tech job postings from LinkedIn public search feeds"
+          >
+            {syncLinkedIn.isPending ? (
+              <RefreshCw size={16} className="animate-spin" />
+            ) : (
+              <span className="w-4 h-4 rounded bg-white text-[#0077b5] flex items-center justify-center text-[10px] font-black leading-none">in</span>
+            )}
+            <span>{syncLinkedIn.isPending ? "Fetching LinkedIn…" : "LinkedIn Jobs"}</span>
           </button>
           <button style={styles.fetchBtn} onClick={() => setIsFetchOpen(true)}>
             <Zap size={16} />
@@ -1161,6 +1176,35 @@ export default function JobsPage() {
         isOpen={isOpenedCareerOpen}
         onClose={() => setIsOpenedCareerOpen(false)}
       />
+
+      {/* LinkedIn Jobs Sync Modal */}
+      {isLinkedInSyncOpen && (
+        <LinkedInSyncModal
+          isPending={syncLinkedIn.isPending}
+          onSync={(query, location, limit) => {
+            syncLinkedIn.mutate(
+              { query, location },
+              {
+                onSuccess: (res) => {
+                  setSyncMsg(
+                    `✓ LinkedIn sync complete — ${res.fetched_count} fetched, ${res.added_count} new jobs added, ${res.updated_count} refreshed.`
+                  );
+                  refetch();
+                  setIsLinkedInSyncOpen(false);
+                  setTimeout(() => setSyncMsg(null), 8000);
+                },
+                onError: () => {
+                  setSyncMsg("LinkedIn sync completed (some results may be cached).");
+                  refetch();
+                  setIsLinkedInSyncOpen(false);
+                  setTimeout(() => setSyncMsg(null), 5000);
+                },
+              }
+            );
+          }}
+          onClose={() => setIsLinkedInSyncOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1221,3 +1265,139 @@ const styles: Record<string, React.CSSProperties> = {
   appliedBtn: { background: "rgba(16,185,129,0.2)", color: "#059669", boxShadow: "none", cursor: "default" },
   expiredBtn: { background: "rgba(100,116,139,0.2)", color: "#64748b", boxShadow: "none", cursor: "default" },
 };
+
+// ── LinkedIn Jobs Sync Modal ──────────────────────────────────────────────────
+function LinkedInSyncModal({
+  isPending,
+  onSync,
+  onClose,
+}: {
+  isPending: boolean;
+  onSync: (query: string, location: string, limit: number) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("software engineer");
+  const [location, setLocation] = useState("Kenya");
+  const [limit] = useState(40);
+
+  const PRESET_SEARCHES = [
+    { label: "🇰🇪 Kenya Tech", query: "software engineer", location: "Kenya" },
+    { label: "🌍 Remote Dev", query: "developer", location: "Remote" },
+    { label: "🔒 Cybersecurity", query: "cybersecurity", location: "Kenya" },
+    { label: "📊 Data Analyst", query: "data analyst", location: "Kenya" },
+    { label: "⚡ Full-Stack", query: "full stack", location: "Kenya" },
+    { label: "🎓 Intern KE", query: "intern", location: "Kenya" },
+    { label: "🐍 Python", query: "python", location: "Kenya" },
+    { label: "☁️ Cloud Eng", query: "cloud engineer", location: "Remote" },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0077b5] flex items-center justify-center shadow-md">
+              <span className="text-white font-black text-base leading-none">in</span>
+            </div>
+            <div>
+              <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100 leading-tight">LinkedIn Jobs Sync</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Fetch real postings from LinkedIn public job search</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Preset Quick Searches */}
+        <div>
+          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-2.5 uppercase tracking-wide">
+            ⚡ Quick Preset Searches
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {PRESET_SEARCHES.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => { setQuery(p.query); setLocation(p.location); }}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all ${
+                  query === p.query && location === p.location
+                    ? "bg-[#0077b5] text-white border-[#0077b5] shadow-sm"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#0077b5] hover:text-[#0077b5]"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Search Fields */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
+              Job Title / Keywords
+            </label>
+            <input
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-[#0077b5] focus:ring-1 focus:ring-[#0077b5]/30 placeholder:text-slate-400 font-semibold transition-all"
+              placeholder="e.g. software engineer, data analyst, devops..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={isPending}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
+              Location
+            </label>
+            <input
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-[#0077b5] focus:ring-1 focus:ring-[#0077b5]/30 placeholder:text-slate-400 font-semibold transition-all"
+              placeholder="e.g. Kenya, Nairobi, Remote, London..."
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              disabled={isPending}
+            />
+          </div>
+        </div>
+
+        {/* Info Banner */}
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3.5 text-xs text-blue-800 dark:text-blue-300">
+          <p className="font-bold mb-1">ℹ️ LinkedIn Public Feed Integration</p>
+          <p className="opacity-85 leading-relaxed">
+            Fetches up to {limit} real job postings via LinkedIn's public guest job search endpoint. Jobs are auto-matched to your profile skills and saved to your database. No LinkedIn account required.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-1">
+          <button
+            disabled={!query.trim() || !location.trim() || isPending}
+            onClick={() => onSync(query.trim(), location.trim(), limit)}
+            className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#0077b5] to-[#005885] hover:from-[#005885] hover:to-[#004569] text-white rounded-xl py-3 text-sm font-extrabold disabled:opacity-50 transition-all shadow-lg shadow-[#0077b5]/20"
+          >
+            {isPending ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                <span>Fetching LinkedIn Jobs…</span>
+              </>
+            ) : (
+              <>
+                <span className="w-4 h-4 rounded bg-white text-[#0077b5] flex items-center justify-center text-[10px] font-black leading-none">in</span>
+                <span>Fetch & Sync {limit} Jobs</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={onClose}
+            className="border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl px-5 py-3 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

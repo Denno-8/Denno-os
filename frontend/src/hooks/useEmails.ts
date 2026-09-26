@@ -35,3 +35,18 @@ export function useDeleteEmail() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
+
+export function useProcessInboundEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof emailsService.processInbound>[0]) => emailsService.processInbound(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["interviews"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+    },
+  });
+}
+

@@ -16,7 +16,12 @@ import {
   EyeOff,
   ExternalLink,
   Check,
+  RefreshCw,
+  Video,
+  Zap,
 } from "lucide-react";
+import { api } from "../services/api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useNotifications,
   useMarkNotificationRead,
@@ -59,7 +64,9 @@ function formatRelativeTime(dateString: string): string {
 
 export default function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: notifications, isLoading } = useNotifications();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const markRead = useMarkNotificationRead();
   const markUnread = useMarkNotificationUnread();
@@ -68,6 +75,20 @@ export default function NotificationDrawer({ isOpen, onClose }: NotificationDraw
   const batchMarkRead = useBatchMarkNotificationsRead();
   const batchDelete = useBatchDeleteNotifications();
   const clearAll = useClearNotifications();
+
+  const handleSyncInbox = async () => {
+    setIsSyncing(true);
+    try {
+      await api.post("/emails/sync-inbox", {});
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+    } catch {
+      // Ignore non-fatal sync notice
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
@@ -173,6 +194,14 @@ export default function NotificationDrawer({ isOpen, onClose }: NotificationDraw
             </p>
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button
+              title="Sync Inbound Email Inbox"
+              style={styles.actionIconBtn}
+              onClick={handleSyncInbox}
+              disabled={isSyncing}
+            >
+              <RefreshCw size={15} className={isSyncing ? "animate-spin text-blue-400" : ""} />
+            </button>
             {unreadItems.length > 0 && markAllRead?.mutate && (
               <button
                 title="Mark all as read"

@@ -18,6 +18,13 @@ export const jobsService = {
   apply: (id: string) => api.post<Application>(`/jobs/${id}/apply`, {}),
   fetchExternal: (url: string) => api.post<Job>("/jobs/fetch-external", { url }),
   syncLive: () => api.post<{ added_count: number; updated_count: number; total_fetched: number }>("/jobs/sync-live", {}),
+  syncLinkedIn: (query?: string, location?: string) => {
+    const qs = new URLSearchParams();
+    if (query) qs.set("q", query);
+    if (location) qs.set("location", location);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return api.post<{ status: string; fetched_count: number; added_count: number; updated_count: number }>(`/jobs/sync-linkedin${suffix}`, {});
+  },
   getSalaryBenchmarks: () => api.get<SalaryBenchmarksResponse>("/jobs/intelligence/salary-benchmarks"),
   getCompanyIntelligence: (companyName: string) => api.get<CompanyIntelligence>(`/jobs/intelligence/company/${encodeURIComponent(companyName)}`),
 };

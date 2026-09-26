@@ -72,6 +72,14 @@ class ClassifyEmailPayload(BaseModel):
     sender: Optional[str] = ""
 
 
+class InboundProcessPayload(BaseModel):
+    sender_name: Optional[str] = ""
+    sender_email: Optional[str] = ""
+    subject: str
+    body: str
+    application_id: Optional[int] = None
+
+
 @router.post("/sync-inbox")
 async def sync_inbox(
     user_id: int = Depends(get_current_user_id),
@@ -79,6 +87,26 @@ async def sync_inbox(
 ):
     """Syncs/parses incoming recruiter emails and auto-updates matching active Applications."""
     return await service.sync_inbound_responses(user_id)
+
+
+@router.post("/process-inbound")
+async def process_inbound_email(
+    payload: InboundProcessPayload,
+    user_id: int = Depends(get_current_user_id),
+    service: EmailService = Depends(get_service),
+):
+    """
+    Processes an inbound recruiter email (manual paste or synced), auto-matches to active job applications,
+    updates stage, creates interview/calendar entries, generates in-app notifications, and saves email record.
+    """
+    return await service.process_inbound_email(
+        user_id=user_id,
+        sender_name=payload.sender_name or "",
+        sender_email=payload.sender_email or "",
+        subject=payload.subject,
+        body=payload.body,
+        application_id=payload.application_id,
+    )
 
 
 @router.post("/classify")
@@ -89,6 +117,7 @@ async def classify_email_text(
     """AI Email Intent Classifier for recruiter emails."""
     from app.services.email_classifier_service import EmailClassifierService
     return EmailClassifierService.classify_email(payload.subject, payload.body, payload.sender or "")
+
 
 
 @router.get("/oauth/google/url")
