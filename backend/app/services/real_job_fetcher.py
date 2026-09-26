@@ -673,17 +673,34 @@ class RealJobFetcher:
         # 3. Create digest notification if new jobs were ingested
         if total_added > 0:
             try:
-                from app.services.notification_service import NotificationService
-                from app.schemas.notification import NotificationCreate
-                notif_svc = NotificationService(self.db)
-                await notif_svc.create(1, NotificationCreate(
-                    title="🔥 Daily Tech Jobs Digest Updated!",
-                    message=f"Ingested {total_added} new software & tech jobs across Kenya and global remote portals.",
-                    type="match",
-                    link="/jobs"
-                ))
-            except Exception:
-                pass
+                from app.models.sqlalchemy_models import User
+                from sqlalchemy import select
+                res = await self.db.execute(select(User.id).limit(50))
+                user_ids = res.scalars().all()
+                if user_ids:
+                    from app.services.notification_service import NotificationService
+                    from app.schemas.notification import NotificationCreate
+                    notif_svc = NotificationService(self.db)
+                    for uid in user_ids:
+                        try:
+                            await notif_svc.create(uid, NotificationCreate(
+                                title="🔥 Daily Tech Jobs Digest Updated!",
+                                message=f"Ingested {total_added} new software & tech jobs across Kenya and global remote portals.",
+                                type="match",
+                                link="/jobs"
+                            ))
+                        except Exception as n_err:
+                            logger.warning("Failed to create notification for user %s: %s", uid, n_err)
+                            try:
+                                await self.db.rollback()
+                            except Exception:
+                                pass
+            except Exception as exc:
+                logger.warning("Failed to dispatch digest notifications: %s", exc)
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         return {
             "status": "success",

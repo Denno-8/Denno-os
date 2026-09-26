@@ -75,24 +75,43 @@ async def _daily_job_fetch_loop():
                     fetcher = RealJobFetcher(session)
                     result = await fetcher.fetch_and_sync_all()
                     logger.info("Daily background job fetch completed: %s", result)
+                    try:
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
 
                     # Trigger daily job digest alerts for active users
-                    job_svc = JobService(session)
-                    today_jobs = await job_svc.list(q=None, mode=None, level=None, skip=0, limit=10, date_filter="today", sort="newest")
-                    if today_jobs:
-                        users_res = await session.execute(select(User).limit(50))
-                        users = users_res.scalars().all()
-                        notif_svc = NotificationService(session)
-                        for u in users:
+                    try:
+                        job_svc = JobService(session)
+                        today_jobs = await job_svc.list(q=None, mode=None, level=None, skip=0, limit=10, date_filter="today", sort="newest")
+                        if today_jobs:
+                            users_res = await session.execute(select(User).limit(50))
+                            users = users_res.scalars().all()
+                            notif_svc = NotificationService(session)
+                            for u in users:
+                                try:
+                                    await notif_svc.send_daily_digest_alert(
+                                        user_id=u.id,
+                                        user_email=u.email,
+                                        user_name=getattr(u, "full_name", getattr(u, "email", "User")),
+                                        top_jobs=today_jobs
+                                    )
+                                except Exception as n_err:
+                                    logger.warning("Failed daily digest alert for user %s: %s", getattr(u, "id", None), n_err)
+                                    try:
+                                        await session.rollback()
+                                    except Exception:
+                                        pass
                             try:
-                                await notif_svc.send_daily_digest_alert(
-                                    user_id=u.id,
-                                    user_email=u.email,
-                                    user_name=getattr(u, "full_name", u.email),
-                                    top_jobs=today_jobs
-                                )
+                                await session.commit()
                             except Exception:
-                                pass
+                                await session.rollback()
+                    except Exception as digest_err:
+                        logger.warning("Daily digest dispatch encountered error: %s", digest_err)
+                        try:
+                            await session.rollback()
+                        except Exception:
+                            pass
         except Exception as exc:
             logger.error("Daily background job fetch encountered error: %s", exc)
 
