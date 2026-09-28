@@ -54,9 +54,7 @@ export default function EmailsPage() {
   const deleteEmail = useDeleteEmail();
   const queryClient = useQueryClient();
 
-  if (isLoading) return <div className="p-6 text-sm text-slate-500 dark:text-slate-400">Loading inbox…</div>;
-  if (isError) return <ApiErrorCard onRetry={refetch} />;
-
+  // useMemo MUST be before any early returns to comply with React's Rules of Hooks
   const appMap = useMemo(() => {
     const map = new Map<string, any>();
     (applications ?? []).forEach((app: any) => {
@@ -64,6 +62,9 @@ export default function EmailsPage() {
     });
     return map;
   }, [applications]);
+
+  if (isLoading) return <div className="p-6 text-sm text-slate-500 dark:text-slate-400">Loading inbox…</div>;
+  if (isError) return <ApiErrorCard onRetry={refetch} />;
 
   const filtered = (emails ?? []).filter(
     (e) =>
