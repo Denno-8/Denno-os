@@ -537,7 +537,7 @@ class ApplicationService:
 
         if res and res.get("sent"):
             if application.stage in ("Applied", "Unresponded"):
-                await self.repo.update_stage(app_id, user_id, "Followed Up")
+                await self.repo.update_stage(app_id, user_id, "Confirmed")
 
         return res
 

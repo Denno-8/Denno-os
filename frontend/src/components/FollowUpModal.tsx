@@ -137,7 +137,7 @@ export default function FollowUpModal({
                   Your tailored check-in email was successfully dispatched to the recruiter.
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-                  Stage updated to "Followed Up"
+                  Stage updated to "Confirmed"
                 </div>
               </div>
               {dispatchDetails?.smtp_warning && (

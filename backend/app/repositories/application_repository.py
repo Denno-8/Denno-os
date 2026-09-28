@@ -112,6 +112,10 @@ class ApplicationRepository:
             await self.session.flush()
         return application
 
+    async def update_stage(self, app_id: int, user_id: int, stage: str) -> Application | None:
+        """Update only the stage field of an application."""
+        return await self.update(app_id, user_id, {"stage": stage})
+
     async def delete(self, app_id: int, user_id: int) -> bool:
         """Delete application by ID, scoped to user."""
         application = await self.get(app_id, user_id)

@@ -58,6 +58,7 @@ export default function ApplicationsPage() {
   const [checklistTarget, setChecklistTarget] = useState<any | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
 
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [isBatchSending, setIsBatchSending] = useState(false);
@@ -161,14 +162,32 @@ export default function ApplicationsPage() {
     }
   };
 
+  // Stage-group filter maps for each stat card
+  const STAGE_FILTER_MAP: Record<string, string[]> = {
+    "Total Tracked": [],   // empty = show all
+    "Responded": ["Confirmed", "Under Review", "Assessment", "Technical", "HR Interview", "Final Interview", "Offer", "Accepted", "Rejected"],
+    "Pending / Unresponded": ["Applied", "Unresponded", "Saved", "Preparing", "CV Optimized"],
+    "Feedback Received": ["Assessment", "Technical", "HR Interview", "Final Interview", "Offer"],
+    "Interview Rate": ["Technical", "HR Interview", "Final Interview"],
+    "Response Rate": ["Confirmed", "Under Review", "Assessment", "Technical", "HR Interview", "Final Interview", "Offer", "Accepted", "Rejected"],
+  };
+
   const filteredApplications = useMemo(() => {
     if (!applications) return [];
-    if (!searchQuery.trim()) return applications;
+    let base = applications;
+
+    // Apply stat-card stage filter
+    if (stageFilter && STAGE_FILTER_MAP[stageFilter]?.length) {
+      base = base.filter((a) => STAGE_FILTER_MAP[stageFilter!].includes(a.stage));
+    }
+
+    // Apply search query
+    if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase().trim();
-    return applications.filter(
+    return base.filter(
       (a) => a.role.toLowerCase().includes(q) || a.company_name.toLowerCase().includes(q)
     );
-  }, [applications, searchQuery]);
+  }, [applications, searchQuery, stageFilter]);
 
   if (isLoading) {
     return (
@@ -337,13 +356,60 @@ export default function ApplicationsPage() {
 
       {/* Analytics Telemetry Cards */}
       {analytics && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <StatCard label="Total Tracked" value={analytics.total} icon={<Layers size={18} className="text-blue-500" />} />
-          <StatCard label="Responded" value={analytics.responded} icon={<Briefcase size={18} className="text-emerald-500" />} />
-          <StatCard label="Pending / Unresponded" value={(analytics as any).not_responded ?? 0} icon={<Layers size={18} className="text-amber-500" />} />
-          <StatCard label="Feedback Received" value={(analytics as any).feedback_received ?? 0} icon={<Award size={18} className="text-purple-500" />} />
-          <StatCard label="Interview Rate" value={`${analytics.interview_rate}%`} icon={<TrendingUp size={18} className="text-indigo-500" />} />
-          <StatCard label="Response Rate" value={`${analytics.response_rate}%`} icon={<TrendingUp size={18} className="text-amber-500" />} />
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <StatCard
+              label="Total Tracked" value={analytics.total}
+              icon={<Layers size={18} className="text-blue-500" />}
+              active={stageFilter === "Total Tracked"}
+              onClick={() => setStageFilter(prev => prev === "Total Tracked" ? null : "Total Tracked")}
+            />
+            <StatCard
+              label="Responded" value={analytics.responded}
+              icon={<Briefcase size={18} className="text-emerald-500" />}
+              active={stageFilter === "Responded"}
+              onClick={() => setStageFilter(prev => prev === "Responded" ? null : "Responded")}
+            />
+            <StatCard
+              label="Pending / Unresponded" value={(analytics as any).not_responded ?? 0}
+              icon={<Layers size={18} className="text-amber-500" />}
+              active={stageFilter === "Pending / Unresponded"}
+              onClick={() => setStageFilter(prev => prev === "Pending / Unresponded" ? null : "Pending / Unresponded")}
+            />
+            <StatCard
+              label="Feedback Received" value={(analytics as any).feedback_received ?? 0}
+              icon={<Award size={18} className="text-purple-500" />}
+              active={stageFilter === "Feedback Received"}
+              onClick={() => setStageFilter(prev => prev === "Feedback Received" ? null : "Feedback Received")}
+            />
+            <StatCard
+              label="Interview Rate" value={`${analytics.interview_rate}%`}
+              icon={<TrendingUp size={18} className="text-indigo-500" />}
+              active={stageFilter === "Interview Rate"}
+              onClick={() => setStageFilter(prev => prev === "Interview Rate" ? null : "Interview Rate")}
+            />
+            <StatCard
+              label="Response Rate" value={`${analytics.response_rate}%`}
+              icon={<TrendingUp size={18} className="text-amber-500" />}
+              active={stageFilter === "Response Rate"}
+              onClick={() => setStageFilter(prev => prev === "Response Rate" ? null : "Response Rate")}
+            />
+          </div>
+          {/* Active filter badge */}
+          {stageFilter && (
+            <div className="flex items-center gap-2 animate-fade-in">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 text-xs font-extrabold border border-blue-300 dark:border-blue-700">
+                <Layers size={12} />
+                Filtered: <em className="not-italic font-black">{stageFilter}</em>
+              </span>
+              <button
+                onClick={() => setStageFilter(null)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-950 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
+              >
+                <X size={11} /> Clear Filter
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -687,17 +753,47 @@ export default function ApplicationsPage() {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
+function StatCard({
+  label, value, icon, onClick, active,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+}) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left rounded-2xl border p-4 shadow-sm flex items-center justify-between transition-all duration-200 group
+        ${
+          active
+            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 ring-2 ring-blue-400/40 dark:ring-blue-600/40 shadow-md"
+            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:bg-blue-50/30 dark:hover:bg-blue-950/20 cursor-pointer"
+        }`}
+    >
       <div>
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
-        <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{value}</div>
+        <div className={`text-xs font-semibold transition-colors ${
+          active ? "text-blue-700 dark:text-blue-300" : "text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400"
+        }`}>{label}</div>
+        <div className={`text-2xl font-extrabold mt-1 transition-colors ${
+          active ? "text-blue-700 dark:text-blue-200" : "text-slate-900 dark:text-slate-100"
+        }`}>{value}</div>
+        {onClick && (
+          <div className={`text-[10px] font-bold mt-0.5 transition-colors ${
+            active ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-600 group-hover:text-blue-500"
+          }`}>
+            {active ? "✕ Clear filter" : "Click to filter"}
+          </div>
+        )}
       </div>
-      <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+      <div className={`p-3 rounded-xl transition-colors ${
+        active ? "bg-blue-100 dark:bg-blue-900/60" : "bg-slate-50 dark:bg-slate-800 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/30"
+      }`}>
         {icon}
       </div>
-    </div>
+    </button>
   );
 }
 
