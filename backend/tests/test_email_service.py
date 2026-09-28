@@ -96,10 +96,14 @@ async def test_process_inbound_email_matching(mock_db):
     mock_app.recruiter_email = "recruiter@safaricom.et"
     mock_app.stage = "Applied"
 
-    mock_exec_res = MagicMock()
-    mock_exec_res.scalars.return_value.all.return_value = [mock_app]
-    mock_exec_res.scalars.return_value.first.return_value = mock_app
-    mock_db.execute = AsyncMock(return_value=mock_exec_res)
+    mock_dup_res = MagicMock()
+    mock_dup_res.scalars.return_value.first.return_value = None
+
+    mock_app_res = MagicMock()
+    mock_app_res.scalars.return_value.first.return_value = mock_app
+    mock_app_res.scalars.return_value.all.return_value = [mock_app]
+
+    mock_db.execute = AsyncMock(side_effect=[mock_dup_res, mock_app_res, mock_app_res])
     mock_db.commit = AsyncMock()
 
     mock_created_email = MagicMock()

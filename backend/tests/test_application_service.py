@@ -63,6 +63,16 @@ async def test_generate_followup_draft(mock_db):
     assert "Safaricom" in res["company_name"]
     assert "BEGIN:VCALENDAR" in res["ics_content"]
 
+    # Test string date_applied format
+    mock_app.date_applied = "2026-09-20T10:00:00"
+    res_str = await service.generate_followup_draft(1, 123, tone="polite")
+    assert res_str is not None
+
+    # Test None date_applied format
+    mock_app.date_applied = None
+    res_none = await service.generate_followup_draft(1, 123, tone="polite")
+    assert res_none is not None
+
 
 @pytest.mark.asyncio
 async def test_get_pipeline_funnel_analytics(mock_db):

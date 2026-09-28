@@ -327,18 +327,31 @@ class ApplicationService:
 
     async def generate_followup_draft(self, app_id: int, user_id: int, tone: str = "polite") -> dict | None:
         """Generates a contextual follow-up email draft and an iCal (.ics) reminder for an application."""
-        from datetime import date, timedelta
+        from datetime import date, timedelta, datetime, timezone
         application = await self.repo.get(app_id, user_id)
         if not application:
             return None
 
-        comp_name = application.company_name
-        role = application.role
-        stage = application.stage
-        date_applied = application.date_applied or datetime.now(timezone.utc).date()
-        rec_email = application.recruiter_email or f"careers@{comp_name.lower().replace(' ', '')}.com"
+        comp_name = application.company_name or "Company"
+        role = application.role or "Position"
+        stage = application.stage or "Applied"
 
-        days_elapsed = (datetime.now(timezone.utc).date() - date_applied).days
+        today = datetime.now(timezone.utc).date()
+        raw_date = application.date_applied
+        if isinstance(raw_date, datetime):
+            date_applied = raw_date.date()
+        elif isinstance(raw_date, date):
+            date_applied = raw_date
+        elif isinstance(raw_date, str):
+            try:
+                date_applied = date.fromisoformat(raw_date.split("T")[0])
+            except Exception:
+                date_applied = today
+        else:
+            date_applied = today
+
+        days_elapsed = max(0, (today - date_applied).days)
+        rec_email = application.recruiter_email or f"careers@{comp_name.lower().replace(' ', '')}.com"
 
         # Fetch the real applicant name from the user profile
         applicant_name = "Applicant"
