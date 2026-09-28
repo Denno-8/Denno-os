@@ -482,7 +482,7 @@ ${applicantTitle}`;
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block font-extrabold text-slate-800 dark:text-slate-200 mb-1">
                   Role Title *
@@ -499,106 +499,97 @@ ${applicantTitle}`;
 
               <div>
                 <label className="block font-extrabold text-slate-800 dark:text-slate-200 mb-1">
-                  Salary Benchmark Range (Optional)
+                  Salary Benchmark Range
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. KES 350,000 - KES 500,000"
+                  placeholder="e.g. KES 350,000 - 500,000"
                   value={salaryRange}
                   onChange={(e) => setSalaryRange(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold focus:border-rose-500"
                 />
               </div>
-            </div>
 
-            {/* Application Deadline Field */}
-            <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                <label className="font-extrabold text-slate-900 dark:text-amber-200 flex items-center gap-1.5">
-                  <Calendar size={14} className="text-amber-600 dark:text-amber-400" />
-                  Application Deadline (Optional)
-                </label>
-                {daysUntil !== null && (
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                    daysUntil < 0
-                      ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                      : daysUntil <= 3
-                      ? "bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100"
-                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                  }`}>
-                    {daysUntil < 0 ? `Expired ${Math.abs(daysUntil)} days ago` : daysUntil === 0 ? "Deadline is TODAY!" : `⏳ ${daysUntil} days remaining`}
-                  </span>
-                )}
-              </div>
-              <input
-                type="date"
-                value={applicationDeadline}
-                onChange={(e) => setApplicationDeadline(e.target.value)}
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold text-xs focus:border-amber-500"
-              />
-            </div>
-
-            {/* Job Description, Requirements & Checklist Input Collapsible */}
-            <div className="border border-indigo-200 dark:border-indigo-900/60 rounded-2xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-950/20">
-              <button
-                type="button"
-                onClick={() => setShowContextSection(!showContextSection)}
-                className="w-full px-4 py-3 bg-indigo-100/60 dark:bg-indigo-950/60 flex items-center justify-between text-indigo-950 dark:text-indigo-200 font-extrabold text-xs transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
-              >
-                <div className="flex items-center gap-2">
-                  <ListChecks size={15} className="text-indigo-600 dark:text-indigo-400" />
-                  <span>Job Description, Requirements &amp; Checklist (Aids AI CV &amp; Letters)</span>
-                  {(jobDescription.trim() || jobRequirements.trim()) && (
-                    <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] rounded-full font-bold">
-                      Context Active
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                    <Calendar size={13} className="text-amber-500" /> Application Deadline
+                  </label>
+                  {daysUntil !== null && (
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+                      daysUntil < 0
+                        ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                        : daysUntil <= 3
+                        ? "bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100"
+                        : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                    }`}>
+                      {daysUntil < 0 ? `Expired ${Math.abs(daysUntil)}d ago` : daysUntil === 0 ? "TODAY!" : `${daysUntil}d left`}
                     </span>
                   )}
                 </div>
-                {showContextSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
+                <input
+                  type="date"
+                  value={applicationDeadline}
+                  onChange={(e) => setApplicationDeadline(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold focus:border-amber-500 text-xs"
+                />
+              </div>
+            </div>
 
-              {showContextSection && (
-                <div className="p-4 space-y-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Job Description / Role Overview
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={jobDescription}
-                      onChange={(e) => setJobDescription(e.target.value)}
-                      placeholder="Paste the job description here... (Used by AI to extract keywords and align your CV/letters)"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Requirements Checklist &amp; Technical Qualifications
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={jobRequirements}
-                      onChange={(e) => setJobRequirements(e.target.value)}
-                      placeholder="Paste job requirements or skills checklist (e.g. • 5+ yrs Python/FastAPI • PostgreSQL • Cloud Infra • CI/CD)..."
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Special AI Guidance / Key Focus Instructions (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={customInstructions}
-                      onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="e.g., Highlight leadership skills, system scalability, or specific project outcomes"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold text-xs focus:border-indigo-500"
-                    />
-                  </div>
+            {/* Job Description, Requirements & Checklist Input Card (Prominent & Always Visible) */}
+            <div className="border border-indigo-200 dark:border-indigo-900/80 rounded-2xl overflow-hidden bg-indigo-50/50 dark:bg-indigo-950/30 p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-indigo-200 dark:border-indigo-900/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <ListChecks size={16} className="text-indigo-600 dark:text-indigo-400" />
+                  <span className="font-extrabold text-indigo-950 dark:text-indigo-200 text-xs">
+                    Job Description, Requirements &amp; Checklist (AI Guidance Context)
+                  </span>
                 </div>
-              )}
+                <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] rounded-full font-extrabold">
+                  Aids AI CV &amp; Letters
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
+                    📋 Paste Job Description / Role Overview
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the job description here... (Used by AI to extract keywords and align your CV/letters)"
+                    className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
+                    🎯 Paste Requirements &amp; Skills Checklist
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={jobRequirements}
+                    onChange={(e) => setJobRequirements(e.target.value)}
+                    placeholder="Paste job requirements or skills checklist (e.g. • 5+ yrs Python/FastAPI • PostgreSQL • Cloud Infra • CI/CD)..."
+                    className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
+                  💡 Special AI Guidance / Focus Instructions (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  placeholder="e.g., Highlight leadership skills, system scalability, or specific project outcomes"
+                  className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold text-xs focus:border-indigo-500"
+                />
+              </div>
             </div>
 
             {/* Attached CV Version */}
