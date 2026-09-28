@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Mail, Send, FileText, Sparkles, Wand2, RefreshCw, X, CheckCircle2, AlertCircle, Paperclip, ShieldCheck, Building2, Globe, Rocket, Zap } from "lucide-react";
+import { Mail, Send, FileText, Sparkles, Wand2, RefreshCw, X, CheckCircle2, AlertCircle, Paperclip, ShieldCheck, Building2, Globe, Rocket, Zap, Calendar, ListChecks, ChevronDown, ChevronUp, Sliders, Info, Check } from "lucide-react";
 import { useCreateApplication } from "../hooks/useApplications";
 import { useCVVersions, useGenerateCVForJob } from "../hooks/useCV";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -32,9 +32,22 @@ export default function DirectEmailDispatchModal({
   const [roleTitle, setRoleTitle] = useState("");
   const [recruiterEmail, setRecruiterEmail] = useState("");
   const [salaryRange, setSalaryRange] = useState("");
+  const [applicationDeadline, setApplicationDeadline] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
   const [appLetterText, setAppLetterText] = useState("");
   const [cvVersionId, setCvVersionId] = useState("");
+
+  // Job Description, Requirements & AI Guidance Context
+  const [jobDescription, setJobDescription] = useState("");
+  const [jobRequirements, setJobRequirements] = useState("");
+  const [customInstructions, setCustomInstructions] = useState("");
+
+  // UI Accordions & Optional Feature Toggles
+  const [showContextSection, setShowContextSection] = useState(true);
+  const [showOptionalSettings, setShowOptionalSettings] = useState(false);
+  const [optAttachAppLetter, setOptAttachAppLetter] = useState(true);
+  const [optAttachCoverLetter, setOptAttachCoverLetter] = useState(true);
+  const [optCreateDeadlineAlert, setOptCreateDeadlineAlert] = useState(true);
 
   const [isGeneratingCV, setIsGeneratingCV] = useState(false);
   const [cvNotice, setCvNotice] = useState<string | null>(null);
@@ -50,12 +63,18 @@ export default function DirectEmailDispatchModal({
         setSalaryRange(
           `${initialJob.currency || "KES"} ${initialJob.salary_min.toLocaleString()} - ${initialJob.salary_max.toLocaleString()}`
         );
+        setJobDescription(initialJob.description || "");
+        setJobRequirements(initialJob.required_skills ? `Required Skills:\n• ${initialJob.required_skills.join("\n• ")}` : "");
       } else {
         setCompanyName("");
         setRoleTitle("");
         setRecruiterEmail("");
         setSalaryRange("");
+        setJobDescription("");
+        setJobRequirements("");
       }
+      setApplicationDeadline("");
+      setCustomInstructions("");
       setCoverLetter("");
       setAppLetterText("");
       setCvNotice(null);
@@ -74,6 +93,12 @@ export default function DirectEmailDispatchModal({
     }
     window.open(portalUrl, "_blank", "noopener,noreferrer");
 
+    const notesWithDeadline = [
+      `Application redirected to official portal: ${portalUrl}`,
+      applicationDeadline ? `Application Deadline: ${applicationDeadline}` : null,
+      jobRequirements ? `Requirements Context:\n${jobRequirements}` : null,
+    ].filter(Boolean).join("\n\n");
+
     createApplication.mutate(
       {
         company_name: companyName.trim(),
@@ -81,13 +106,13 @@ export default function DirectEmailDispatchModal({
         stage: "Applied",
         date_applied: new Date().toISOString().slice(0, 10),
         salary_range: salaryRange.trim() || undefined,
-        notes: `Application redirected to official portal: ${portalUrl}`,
+        notes: notesWithDeadline,
         apply_method: "website",
         source_job_id: initialJob?.id,
         source_url: portalUrl,
       },
       {
-        onSuccess: (res: any) => {
+        onSuccess: () => {
           setDispatchedSuccess({
             company_name: companyName,
             role: roleTitle,
@@ -104,12 +129,24 @@ export default function DirectEmailDispatchModal({
 
   if (!isOpen) return null;
 
+  const getParsedSkillsList = () => {
+    if (jobRequirements.trim()) {
+      const lines = jobRequirements.split("\n").map(l => l.replace(/^[•\-\*\d\.\s]+/, "").trim()).filter(Boolean);
+      if (lines.length > 0) return lines.slice(0, 8).join(", ");
+    }
+    return initialJob?.required_skills?.join(", ") || "Python, FastAPI, React, PostgreSQL, Docker";
+  };
+
   const handleGenerateAppLetter = () => {
     if (!companyName.trim() || !roleTitle.trim()) {
       alert("Please enter Company Name and Role Title first.");
       return;
     }
-    const skillsList = initialJob?.required_skills?.join(", ") || "Python, FastAPI, React, PostgreSQL, Docker";
+    const skillsList = getParsedSkillsList();
+    const requirementsSnippet = jobRequirements.trim()
+      ? `\nKey Job Requirements & Qualifications Addressed:\n${jobRequirements.trim().slice(0, 400)}\n`
+      : "";
+
     const letter = `RECRUITMENT COMMITTEE / HIRING MANAGER
 ${companyName.toUpperCase()}
 
@@ -119,7 +156,8 @@ Dear Hiring Manager,
 
 I am writing to formally present my application for the position of ${roleTitle} at ${companyName}. With extensive expertise in modern software architecture, database management, and scalable cloud applications, I am eager to contribute to ${companyName}'s engineering goals.
 
-Throughout my technical career, I have successfully delivered production software solutions involving ${skillsList}. Having reviewed the requirements for the ${roleTitle} role, I am confident that my practical background in API development, system reliability, and full-stack delivery aligns directly with your team's needs.
+Throughout my technical career, I have successfully delivered production software solutions involving ${skillsList}.${requirementsSnippet}
+Having thoroughly analyzed your job description and specifications for the ${roleTitle} role, I am confident that my practical background in API development, system reliability, and full-stack delivery aligns directly with your team's priorities.
 
 Enclosed with this formal application letter are my ATS-compliant Resume PDF (Version Score: ${selectedCV?.ats_score || 95}%) and supporting Cover Letter PDF.
 
@@ -137,17 +175,21 @@ ${applicantTitle}`;
       alert("Please enter Company Name and Role Title first.");
       return;
     }
+    const skillsList = getParsedSkillsList();
+    const focusContext = customInstructions.trim() ? `\nFocus Area: ${customInstructions.trim()}` : "";
+
     const letter = `Dear Hiring Team at ${companyName},
 
-I am writing to express my strong enthusiasm for the ${roleTitle} position at ${companyName}. With extensive experience in backend development, API integration, and database design, I am confident in my ability to bring immediate value to your technical operations.
+I am writing to express my strong enthusiasm for the ${roleTitle} position at ${companyName}. With extensive experience in backend development, API integration, and database design—particularly using ${skillsList}—I am confident in my ability to bring immediate value to your technical operations.${focusContext}
 
-I have tracked ${companyName}'s recent growth and tech initiatives, and I am particularly drawn to your focus on delivering robust, high-performance software solutions.
+I have tracked ${companyName}'s growth and technical roadmap, and I am particularly drawn to your focus on delivering robust, high-performance software solutions.
 
 Attached, please find my updated ATS-formatted Resume PDF, formal Application Letter PDF, and detailed Cover Letter PDF. I welcome the opportunity to discuss how my qualifications align with your engineering objectives.
 
 Thank you for your time and consideration.
 
 Best regards,
+
 ${applicantName}
 ${applicantTitle}`;
     setCoverLetter(letter);
@@ -160,14 +202,29 @@ ${applicantTitle}`;
     }
     setIsGeneratingCV(true);
     setCvNotice(null);
-    const defaultSkills = ["Python", "FastAPI", "React", "PostgreSQL", "Docker"];
+
+    const parsedSkills = jobRequirements
+      .split("\n")
+      .map(s => s.replace(/^[•\-\*\d\.\s]+/, "").trim())
+      .filter(s => s.length > 1 && s.length < 40);
+
+    const combinedSkills = Array.from(new Set([
+      ...(parsedSkills.length > 0 ? parsedSkills : []),
+      ...(initialJob?.required_skills || ["Python", "FastAPI", "React", "PostgreSQL", "Docker"])
+    ]));
+
+    const fullContextDescription = [
+      jobDescription.trim() ? `Job Overview:\n${jobDescription.trim()}` : null,
+      jobRequirements.trim() ? `Requirements & Checklist:\n${jobRequirements.trim()}` : null,
+      customInstructions.trim() ? `Special Focus Instructions:\n${customInstructions.trim()}` : null,
+    ].filter(Boolean).join("\n\n");
 
     generateCVForJob.mutate(
       {
         job_title: roleTitle.trim(),
         company_name: companyName.trim(),
-        required_skills: defaultSkills,
-        description: initialJob?.description || "",
+        required_skills: combinedSkills.slice(0, 10),
+        description: fullContextDescription || initialJob?.description || "",
       },
       {
         onSuccess: (newCV) => {
@@ -192,11 +249,18 @@ ${applicantTitle}`;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(recruiterEmail.trim())) {
-      setDispatchError("Please enter a valid recruiter email address (e.g. hr@company.com or your email).");
+      setDispatchError("Please enter a valid recruiter email address (e.g. hr@company.com).");
       return;
     }
 
     setDispatchError(null);
+
+    const compiledNotes = [
+      coverLetter.trim() || null,
+      applicationDeadline ? `📅 Application Deadline: ${applicationDeadline}` : null,
+      jobRequirements.trim() ? `📋 Requirements Checklist:\n${jobRequirements.trim()}` : null,
+      customInstructions.trim() ? `💡 AI Focus Instructions:\n${customInstructions.trim()}` : null,
+    ].filter(Boolean).join("\n\n---\n\n");
 
     createApplication.mutate(
       {
@@ -206,8 +270,8 @@ ${applicantTitle}`;
         date_applied: new Date().toISOString().slice(0, 10),
         recruiter_email: recruiterEmail.trim(),
         salary_range: salaryRange.trim() || undefined,
-        notes: coverLetter.trim() || undefined,
-        app_letter_text: appLetterText.trim() || coverLetter.trim() || undefined,
+        notes: compiledNotes || undefined,
+        app_letter_text: optAttachAppLetter ? (appLetterText.trim() || coverLetter.trim() || undefined) : undefined,
         apply_method: "email",
         cv_version_id: cvVersionId || undefined,
         source_job_id: initialJob?.id,
@@ -231,6 +295,15 @@ ${applicantTitle}`;
 
   const selectedCV = cvVersions.find((c) => c.id === cvVersionId);
 
+  // Calculate days remaining if deadline is set
+  const getDaysUntilDeadline = () => {
+    if (!applicationDeadline) return null;
+    const diff = new Date(applicationDeadline).getTime() - new Date().setHours(0, 0, 0, 0);
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days;
+  };
+  const daysUntil = getDaysUntilDeadline();
+
   return (
     <div
       className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
@@ -252,7 +325,7 @@ ${applicantTitle}`;
               </h3>
             </div>
             <p className="text-xs text-slate-300 mt-1 m-0">
-              Compose &amp; dispatch an official job application email with attached PDF CV &amp; Cover Letter directly to a recruiter.
+              Compose &amp; dispatch an official job application with job description, requirements checklist, &amp; optional deadline.
             </p>
           </div>
           <button
@@ -275,26 +348,35 @@ ${applicantTitle}`;
                 Application Email Dispatched! <Rocket size={22} className="text-blue-500" />
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                Your application for <strong>{roleTitle}</strong> at <strong>{companyName}</strong> has been formatted into a structured anti-spam MIME message and dispatched to <strong>{recruiterEmail}</strong>.
+                Your application for <strong>{roleTitle}</strong> at <strong>{companyName}</strong> has been formatted into a structured MIME message and dispatched to <strong>{recruiterEmail}</strong>.
               </p>
+              {applicationDeadline && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-full font-bold text-xs">
+                  <Calendar size={13} /> Deadline Set: {new Date(applicationDeadline).toLocaleDateString()}
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 text-xs space-y-2 max-w-md mx-auto text-left">
               <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
-                <Paperclip size={14} className="text-rose-500" /> Dispatched PDF Attachments:
+                <Paperclip size={14} className="text-rose-500" /> Dispatched Attachments:
               </div>
               <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
                 <span>Resume PDF:</span>
                 <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Resume_{companyName.replace(/\s+/g, "_")}.pdf</span>
               </div>
-              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
-                <span>Application Letter PDF:</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Application_Letter_{companyName.replace(/\s+/g, "_")}.pdf</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
-                <span>Cover Letter PDF:</span>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Cover_Letter_{companyName.replace(/\s+/g, "_")}.pdf</span>
-              </div>
+              {optAttachAppLetter && (
+                <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
+                  <span>Application Letter PDF:</span>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Application_Letter_{companyName.replace(/\s+/g, "_")}.pdf</span>
+                </div>
+              )}
+              {optAttachCoverLetter && (
+                <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
+                  <span>Cover Letter PDF:</span>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Cover_Letter_{companyName.replace(/\s+/g, "_")}.pdf</span>
+                </div>
+              )}
             </div>
 
             <div className="pt-2 flex justify-center">
@@ -429,6 +511,96 @@ ${applicantTitle}`;
               </div>
             </div>
 
+            {/* Application Deadline Field */}
+            <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="font-extrabold text-slate-900 dark:text-amber-200 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-amber-600 dark:text-amber-400" />
+                  Application Deadline (Optional)
+                </label>
+                {daysUntil !== null && (
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    daysUntil < 0
+                      ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                      : daysUntil <= 3
+                      ? "bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100"
+                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                  }`}>
+                    {daysUntil < 0 ? `Expired ${Math.abs(daysUntil)} days ago` : daysUntil === 0 ? "Deadline is TODAY!" : `⏳ ${daysUntil} days remaining`}
+                  </span>
+                )}
+              </div>
+              <input
+                type="date"
+                value={applicationDeadline}
+                onChange={(e) => setApplicationDeadline(e.target.value)}
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold text-xs focus:border-amber-500"
+              />
+            </div>
+
+            {/* Job Description, Requirements & Checklist Input Collapsible */}
+            <div className="border border-indigo-200 dark:border-indigo-900/60 rounded-2xl overflow-hidden bg-indigo-50/40 dark:bg-indigo-950/20">
+              <button
+                type="button"
+                onClick={() => setShowContextSection(!showContextSection)}
+                className="w-full px-4 py-3 bg-indigo-100/60 dark:bg-indigo-950/60 flex items-center justify-between text-indigo-950 dark:text-indigo-200 font-extrabold text-xs transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+              >
+                <div className="flex items-center gap-2">
+                  <ListChecks size={15} className="text-indigo-600 dark:text-indigo-400" />
+                  <span>Job Description, Requirements &amp; Checklist (Aids AI CV &amp; Letters)</span>
+                  {(jobDescription.trim() || jobRequirements.trim()) && (
+                    <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] rounded-full font-bold">
+                      Context Active
+                    </span>
+                  )}
+                </div>
+                {showContextSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
+              {showContextSection && (
+                <div className="p-4 space-y-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Job Description / Role Overview
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={jobDescription}
+                      onChange={(e) => setJobDescription(e.target.value)}
+                      placeholder="Paste the job description here... (Used by AI to extract keywords and align your CV/letters)"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Requirements Checklist &amp; Technical Qualifications
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={jobRequirements}
+                      onChange={(e) => setJobRequirements(e.target.value)}
+                      placeholder="Paste job requirements or skills checklist (e.g. • 5+ yrs Python/FastAPI • PostgreSQL • Cloud Infra • CI/CD)..."
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2.5 outline-none font-medium text-xs leading-relaxed resize-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Special AI Guidance / Key Focus Instructions (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={customInstructions}
+                      onChange={(e) => setCustomInstructions(e.target.value)}
+                      placeholder="e.g., Highlight leadership skills, system scalability, or specific project outcomes"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-3 py-2 outline-none font-semibold text-xs focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Attached CV Version */}
             <div className="bg-blue-50/70 dark:bg-blue-950/40 p-4 rounded-2xl border border-blue-200 dark:border-blue-800 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -440,15 +612,15 @@ ${applicantTitle}`;
                   type="button"
                   onClick={handleGenerateTailoredCV}
                   disabled={isGeneratingCV || !roleTitle.trim() || !companyName.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200 transition-all disabled:opacity-50"
-                  title="Auto-generate a 98% ATS-tailored CV version for this role"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200 transition-all disabled:opacity-50 cursor-pointer"
+                  title="Auto-generate a 98% ATS-tailored CV version using pasted description & requirements"
                 >
                   {isGeneratingCV ? (
                     <RefreshCw size={12} className="animate-spin text-emerald-600" />
                   ) : (
                     <Wand2 size={12} className="text-amber-500" />
                   )}
-                  <span>{isGeneratingCV ? "Tailoring CV…" : <><Zap size={11} className="inline" /> Auto-Tailor CV</>}</span>
+                  <span>{isGeneratingCV ? "Tailoring CV…" : <><Zap size={11} className="inline" /> Auto-Tailor CV with Context</>}</span>
                 </button>
               </div>
 
@@ -494,7 +666,7 @@ ${applicantTitle}`;
                 <button
                   type="button"
                   onClick={handleGenerateAppLetter}
-                  className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-lg text-[11px] font-extrabold hover:bg-emerald-200 transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-lg text-[11px] font-extrabold hover:bg-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Sparkles size={11} /> Auto-Generate Application Letter
                 </button>
@@ -503,7 +675,7 @@ ${applicantTitle}`;
                 rows={5}
                 value={appLetterText}
                 onChange={(e) => setAppLetterText(e.target.value)}
-                placeholder="Type or click 'Auto-Generate Application Letter' to create a formal, job-aware application letter. Converted strictly to Application_Letter.pdf attachment."
+                placeholder="Type or click 'Auto-Generate Application Letter' to create a formal, job-aware application letter using your requirements context. Converted strictly to Application_Letter.pdf attachment."
                 className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-3 outline-none font-medium text-xs leading-relaxed resize-none"
               />
               <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-1.5">
@@ -522,7 +694,7 @@ ${applicantTitle}`;
                 <button
                   type="button"
                   onClick={handleGenerateCoverLetter}
-                  className="px-2.5 py-1 bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300 border border-violet-300 dark:border-violet-800 rounded-lg text-[11px] font-extrabold hover:bg-violet-200 transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1 bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300 border border-violet-300 dark:border-violet-800 rounded-lg text-[11px] font-extrabold hover:bg-violet-200 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Sparkles size={11} /> Auto-Generate Cover Letter
                 </button>
@@ -537,11 +709,60 @@ ${applicantTitle}`;
               />
             </div>
 
+            {/* Optional Settings Panel Accordion */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-800/40">
+              <button
+                type="button"
+                onClick={() => setShowOptionalSettings(!showOptionalSettings)}
+                className="w-full px-4 py-2.5 flex items-center justify-between text-slate-700 dark:text-slate-300 font-extrabold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Sliders size={14} className="text-slate-500" />
+                  <span>Optional Dispatch &amp; Attachment Features</span>
+                </div>
+                {showOptionalSettings ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </button>
+
+              {showOptionalSettings && (
+                <div className="p-4 space-y-2.5 border-t border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={optAttachAppLetter}
+                      onChange={(e) => setOptAttachAppLetter(e.target.checked)}
+                      className="rounded text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>Attach Formal Application Letter as PDF</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={optAttachCoverLetter}
+                      onChange={(e) => setOptAttachCoverLetter(e.target.checked)}
+                      className="rounded text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>Attach Tailored Cover Letter as PDF</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={optCreateDeadlineAlert}
+                      onChange={(e) => setOptCreateDeadlineAlert(e.target.checked)}
+                      className="rounded text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>Schedule automatic calendar reminder alert for deadline</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
             {/* Anti-Spam Security Notice */}
             <div className="bg-slate-100 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2">
               <ShieldCheck size={16} className="text-emerald-500 shrink-0" />
               <span>
-                Anti-Spam Safeguard: Includes RFC 5322 MIME headers and 3 PDF attachments (`Resume.pdf`, `Application_Letter.pdf`, `Cover_Letter.pdf`).
+                Anti-Spam Safeguard: Includes RFC 5322 MIME headers and PDF attachments (`Resume.pdf`, `Application_Letter.pdf`, `Cover_Letter.pdf`).
               </span>
             </div>
 
@@ -574,3 +795,4 @@ ${applicantTitle}`;
     </div>
   );
 }
+
