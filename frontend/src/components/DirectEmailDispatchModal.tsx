@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Mail, Send, FileText, Sparkles, Wand2, RefreshCw, X, CheckCircle2, AlertCircle, Paperclip, ShieldCheck, Building2, Globe, Rocket, Zap, Calendar, ListChecks, ChevronDown, ChevronUp, Sliders, Info, Check } from "lucide-react";
+import { Mail, Send, FileText, Sparkles, Wand2, RefreshCw, X, CheckCircle2, AlertCircle, Paperclip, ShieldCheck, Building2, Globe, Rocket, Zap, Calendar, ListChecks, ChevronDown, ChevronUp, Sliders, Info, Check, AlignLeft, Target, Lightbulb } from "lucide-react";
 import { useCreateApplication } from "../hooks/useApplications";
 import { useCVVersions, useGenerateCVForJob } from "../hooks/useCV";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -545,15 +545,16 @@ ${applicantTitle}`;
                     Job Description, Requirements &amp; Checklist (AI Guidance Context)
                   </span>
                 </div>
-                <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] rounded-full font-extrabold">
-                  Aids AI CV &amp; Letters
+                <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] rounded-full font-extrabold flex items-center gap-1">
+                  <Sparkles size={11} /> Aids AI CV &amp; Letters
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
-                    📋 Paste Job Description / Role Overview
+                  <label className="font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px] flex items-center gap-1.5">
+                    <AlignLeft size={13} className="text-indigo-600 dark:text-indigo-400" />
+                    <span>Paste Job Description / Role Overview</span>
                   </label>
                   <textarea
                     rows={4}
@@ -565,8 +566,9 @@ ${applicantTitle}`;
                 </div>
 
                 <div>
-                  <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
-                    🎯 Paste Requirements &amp; Skills Checklist
+                  <label className="font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px] flex items-center gap-1.5">
+                    <Target size={13} className="text-indigo-600 dark:text-indigo-400" />
+                    <span>Paste Requirements &amp; Skills Checklist</span>
                   </label>
                   <textarea
                     rows={4}
@@ -579,8 +581,9 @@ ${applicantTitle}`;
               </div>
 
               <div>
-                <label className="block font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px]">
-                  💡 Special AI Guidance / Focus Instructions (Optional)
+                <label className="font-bold text-indigo-950 dark:text-indigo-200 mb-1 text-[11px] flex items-center gap-1.5">
+                  <Lightbulb size={13} className="text-amber-500" />
+                  <span>Special AI Guidance / Focus Instructions (Optional)</span>
                 </label>
                 <input
                   type="text"
