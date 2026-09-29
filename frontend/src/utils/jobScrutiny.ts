@@ -776,7 +776,594 @@ export function extractApplicationDeadline(description: string = "", notes: stri
   return null;
 }
 
+// ─── Portal Form Fields System ────────────────────────────────────────────────
+// Defines every field a portal form typically collects, pre-filled from
+// the candidate profile, with per-platform customization.
+
+export type PortalFieldType =
+  | "text"
+  | "email"
+  | "phone"
+  | "textarea"
+  | "select"
+  | "date"
+  | "file"
+  | "url"
+  | "number"
+  | "yesno"
+  | "checkbox";
+
+export interface PortalFormField {
+  id: string;
+  label: string;
+  type: PortalFieldType;
+  section: "personal" | "education" | "experience" | "eligibility" | "documents" | "screening" | "eeoc" | "salary";
+  required: boolean;
+  placeholder?: string;
+  options?: string[]; // for select / yesno / radio
+  helpText?: string;
+  /** Pre-filled value from candidate profile */
+  defaultValue?: string;
+  /** Whether the portal will reject blank submissions */
+  validationNote?: string;
+}
+
+export interface PortalScreeningQuestion {
+  id: string;
+  question: string;
+  type: "text" | "textarea" | "yesno" | "select" | "number";
+  category: "motivation" | "experience" | "eligibility" | "salary" | "availability" | "technical" | "behavioral";
+  required: boolean;
+  suggestedAnswer?: string;
+  options?: string[];
+  helpText?: string;
+}
+
+/**
+ * Returns the standard set of portal form fields, pre-filled from the candidate profile,
+ * customized per portal platform.
+ */
+export function getPortalFormFields(
+  portalUrl: string,
+  candidate: {
+    fullName: string;
+    email: string;
+    phone: string;
+    location: string;
+    linkedinUrl: string;
+    githubUrl: string;
+    highestEducation: string;
+    institutionName: string;
+    yearsOfExperience: string;
+    currentEmployer: string;
+    salaryExpectation: string;
+    noticePeriod: string;
+    workAuthorization: string;
+    visaSponsorship: string;
+    relocationPreference: string;
+    idNumber: string;
+    kraPin: string;
+    eeoGender: string;
+    eeoDisability: string;
+    eeoVeteran: string;
+  }
+): PortalFormField[] {
+  const platform = _detectPortalKey(portalUrl);
+  const platformInfo = PORTAL_DATABASE[platform];
+  const isKenyanPortal = platformInfo?.region === "kenya" || platformInfo?.region === "africa";
+
+  const fields: PortalFormField[] = [
+    // ── PERSONAL DETAILS ───────────────────────────────────────────────────────
+    {
+      id: "full_name",
+      label: "Full Legal Name",
+      type: "text",
+      section: "personal",
+      required: true,
+      placeholder: "As it appears on official documents",
+      defaultValue: candidate.fullName,
+      validationNote: "Must match government ID exactly",
+    },
+    {
+      id: "email",
+      label: "Email Address",
+      type: "email",
+      section: "personal",
+      required: true,
+      placeholder: "you@example.com",
+      defaultValue: candidate.email,
+      helpText: "Application confirmation and status updates will be sent here",
+    },
+    {
+      id: "phone",
+      label: "Phone Number",
+      type: "phone",
+      section: "personal",
+      required: true,
+      placeholder: "+254 7XX XXX XXX",
+      defaultValue: candidate.phone,
+      validationNote: "Include country code",
+    },
+    {
+      id: "location",
+      label: "Current Location / City",
+      type: "text",
+      section: "personal",
+      required: true,
+      placeholder: "e.g. Nairobi, Kenya",
+      defaultValue: candidate.location,
+    },
+    {
+      id: "linkedin_url",
+      label: "LinkedIn Profile URL",
+      type: "url",
+      section: "personal",
+      required: platform === "linkedin.com",
+      placeholder: "https://linkedin.com/in/username",
+      defaultValue: candidate.linkedinUrl,
+      helpText: "Strongly recommended — many ATS systems verify your LinkedIn profile",
+    },
+    {
+      id: "github_url",
+      label: "GitHub / Portfolio URL",
+      type: "url",
+      section: "personal",
+      required: false,
+      placeholder: "https://github.com/username",
+      defaultValue: candidate.githubUrl,
+      helpText: "Include if relevant to the role (especially for tech positions)",
+    },
+
+    // ── EDUCATION ──────────────────────────────────────────────────────────────
+    {
+      id: "highest_education",
+      label: "Highest Level of Education",
+      type: "select",
+      section: "education",
+      required: true,
+      options: [
+        "Bachelor's Degree",
+        "Master's Degree",
+        "PhD / Doctorate",
+        "Diploma / Certificate",
+        "High School / A-Levels",
+        "Professional Certification",
+        "Other",
+      ],
+      defaultValue: candidate.highestEducation.includes("Bachelor") ? "Bachelor's Degree"
+        : candidate.highestEducation.includes("Master") ? "Master's Degree"
+        : candidate.highestEducation.includes("Diploma") ? "Diploma / Certificate"
+        : "Bachelor's Degree",
+      helpText: "Select the highest qualification you have completed",
+    },
+    {
+      id: "field_of_study",
+      label: "Field of Study / Degree Title",
+      type: "text",
+      section: "education",
+      required: true,
+      placeholder: "e.g. Bachelor of Science in Information Security",
+      defaultValue: candidate.highestEducation,
+    },
+    {
+      id: "institution_name",
+      label: "University / Institution Name",
+      type: "text",
+      section: "education",
+      required: true,
+      placeholder: "e.g. University of Nairobi",
+      defaultValue: candidate.institutionName,
+    },
+    {
+      id: "graduation_year",
+      label: "Year of Graduation",
+      type: "text",
+      section: "education",
+      required: false,
+      placeholder: "e.g. 2023",
+      helpText: "Enter the year you completed / expect to complete your degree",
+    },
+
+    // ── WORK EXPERIENCE ────────────────────────────────────────────────────────
+    {
+      id: "years_experience",
+      label: "Total Years of Relevant Experience",
+      type: "select",
+      section: "experience",
+      required: true,
+      options: ["0 – 1 Year", "1 – 2 Years", "2 – 3 Years", "3 – 5 Years", "5 – 7 Years", "7 – 10 Years", "10+ Years"],
+      defaultValue: candidate.yearsOfExperience.includes("3") ? "3 – 5 Years"
+        : candidate.yearsOfExperience.includes("5") ? "5 – 7 Years"
+        : candidate.yearsOfExperience.includes("1") ? "1 – 2 Years"
+        : "3 – 5 Years",
+    },
+    {
+      id: "current_employer",
+      label: "Current / Most Recent Job Title",
+      type: "text",
+      section: "experience",
+      required: true,
+      placeholder: "e.g. Full-Stack Software Engineer",
+      defaultValue: candidate.currentEmployer,
+    },
+    {
+      id: "current_company",
+      label: "Current / Most Recent Employer",
+      type: "text",
+      section: "experience",
+      required: false,
+      placeholder: "e.g. Tech Startup Ltd",
+      defaultValue: "",
+      helpText: "Leave blank if currently unemployed or if employer is confidential",
+    },
+
+    // ── ELIGIBILITY & AVAILABILITY ─────────────────────────────────────────────
+    {
+      id: "work_authorization",
+      label: "Work Authorization Status",
+      type: "select",
+      section: "eligibility",
+      required: true,
+      options: [
+        "Authorized / Citizen",
+        "Permanent Resident",
+        "Work Permit Holder",
+        "Require Visa Sponsorship",
+        "Student Visa / OPT",
+      ],
+      defaultValue: candidate.workAuthorization,
+    },
+    {
+      id: "requires_visa_sponsorship",
+      label: "Do you require visa sponsorship?",
+      type: "yesno",
+      section: "eligibility",
+      required: true,
+      options: ["Yes", "No"],
+      defaultValue: candidate.visaSponsorship.toLowerCase().startsWith("no") ? "No" : "Yes",
+    },
+    {
+      id: "relocation",
+      label: "Open to Relocation?",
+      type: "select",
+      section: "eligibility",
+      required: false,
+      options: [
+        "Yes – willing to relocate",
+        "No – local candidates only",
+        "Open to Hybrid / Remote",
+        "Negotiable",
+      ],
+      defaultValue: candidate.relocationPreference.includes("Open") ? "Open to Hybrid / Remote"
+        : candidate.relocationPreference.includes("relocat") ? "Yes – willing to relocate"
+        : "Negotiable",
+    },
+    {
+      id: "notice_period",
+      label: "Notice Period / Availability to Start",
+      type: "select",
+      section: "eligibility",
+      required: true,
+      options: [
+        "Immediately available",
+        "1 week",
+        "2 weeks",
+        "1 month",
+        "2 months",
+        "3 months",
+        "Other",
+      ],
+      defaultValue: candidate.noticePeriod.toLowerCase().includes("immediate") ? "Immediately available"
+        : candidate.noticePeriod.includes("2") ? "2 weeks"
+        : candidate.noticePeriod.includes("1") ? "1 month"
+        : "Immediately available",
+    },
+
+    // ── SALARY ─────────────────────────────────────────────────────────────────
+    {
+      id: "salary_expectation",
+      label: "Salary Expectation",
+      type: "text",
+      section: "salary",
+      required: false,
+      placeholder: "e.g. KES 80,000 – 120,000 per month",
+      defaultValue: candidate.salaryExpectation,
+      helpText: "Be specific with currency and period. Leaving blank may disadvantage your application.",
+      validationNote: "Most portals require a numeric range or specific figure",
+    },
+
+    // ── DOCUMENTS ──────────────────────────────────────────────────────────────
+    {
+      id: "cv_upload",
+      label: "CV / Resume Upload",
+      type: "file",
+      section: "documents",
+      required: true,
+      helpText: "PDF format strongly recommended. Max size: 5MB. Use ATS-clean single-column layout.",
+      validationNote: "REQUIRED — portal will reject applications without a CV file",
+    },
+    {
+      id: "cover_letter_upload",
+      label: "Cover Letter",
+      type: "file",
+      section: "documents",
+      required: platform === "greenhouse.io" || platform === "lever.co" || platform === "workday.com",
+      helpText: "Upload as PDF or paste directly into the portal's cover letter text field",
+    },
+
+    // ── KENYA-SPECIFIC ──────────────────────────────────────────────────────────
+    ...(isKenyanPortal ? [
+      {
+        id: "national_id",
+        label: "National ID / Passport Number",
+        type: "text" as PortalFieldType,
+        section: "documents" as PortalFormField["section"],
+        required: true,
+        placeholder: "e.g. 38491024",
+        defaultValue: candidate.idNumber,
+        validationNote: "Required for Kenyan employment law compliance and background checks",
+      },
+      {
+        id: "kra_pin",
+        label: "KRA PIN (Tax Compliance)",
+        type: "text" as PortalFieldType,
+        section: "documents" as PortalFormField["section"],
+        required: isKenyanPortal,
+        placeholder: "e.g. A019283471K",
+        defaultValue: candidate.kraPin,
+        helpText: "Kenya Revenue Authority Personal Identification Number",
+        validationNote: "Required by government, regulated sector, and major corporate employers in Kenya",
+      },
+    ] : []),
+
+    // ── EEOC / DIVERSITY ────────────────────────────────────────────────────────
+    {
+      id: "eeo_gender",
+      label: "Gender Identity (Optional EEO)",
+      type: "select",
+      section: "eeoc",
+      required: false,
+      options: ["Male", "Female", "Non-binary", "Prefer not to say", "Decline to disclose"],
+      defaultValue: candidate.eeoGender,
+      helpText: "Voluntary equal opportunity disclosure — does not affect application scoring",
+    },
+    {
+      id: "eeo_disability",
+      label: "Disability Status (Optional EEO)",
+      type: "select",
+      section: "eeoc",
+      required: false,
+      options: ["No disability", "Yes, I have a disability", "Prefer not to say"],
+      defaultValue: candidate.eeoDisability,
+    },
+    {
+      id: "eeo_veteran",
+      label: "Veteran Status (Optional EEO)",
+      type: "select",
+      section: "eeoc",
+      required: false,
+      options: ["Not a protected veteran", "I am a protected veteran", "Prefer not to say"],
+      defaultValue: candidate.eeoVeteran,
+    },
+  ];
+
+  return fields;
+}
+
+/**
+ * Extracts job-specific portal screening questions from a job description.
+ * These are questions the portal form will ask about eligibility, motivation,
+ * and technical fit — distinct from generic profile fields.
+ */
+export function extractPortalScreeningQuestions(
+  job: {
+    title: string;
+    company_name: string;
+    description?: string | null;
+    requirements?: string[] | null;
+    required_skills?: string[] | null;
+    mode?: string;
+    employment_type?: string;
+    salary_min?: number;
+    salary_max?: number;
+    currency?: string;
+    level?: string;
+  },
+  candidate: {
+    fullName: string;
+    email: string;
+    location: string;
+    yearsOfExperience: string;
+    salaryExpectation: string;
+    noticePeriod: string;
+    screeningA1: string;
+    screeningA2: string;
+    screeningA3: string;
+  }
+): PortalScreeningQuestion[] {
+  const skills = job.required_skills || [];
+  const topSkill = skills[0] || "the required technology stack";
+  const secondSkill = skills[1] || "supporting tools";
+  const desc = (job.description || "").toLowerCase();
+
+  const questions: PortalScreeningQuestion[] = [];
+
+  // ── MOTIVATION ─────────────────────────────────────────────────────────────
+  questions.push({
+    id: "sq_motivation",
+    question: `Why are you interested in the ${job.title} role at ${job.company_name}?`,
+    type: "textarea",
+    category: "motivation",
+    required: true,
+    suggestedAnswer: candidate.screeningA1,
+    helpText: "Be specific about the company, team, or impact area. Generic answers are filtered out.",
+  });
+
+  // ── TECHNICAL EXPERIENCE ───────────────────────────────────────────────────
+  questions.push({
+    id: "sq_tech_experience",
+    question: `Describe your experience with ${topSkill}${secondSkill !== "supporting tools" ? ` and ${secondSkill}` : ""}.`,
+    type: "textarea",
+    category: "technical",
+    required: true,
+    suggestedAnswer: candidate.screeningA2,
+    helpText: "Include specific projects, tools, and measurable outcomes.",
+  });
+
+  questions.push({
+    id: "sq_project",
+    question: "Describe a complex technical project you have worked on. What was your role and what was the outcome?",
+    type: "textarea",
+    category: "behavioral",
+    required: true,
+    suggestedAnswer: candidate.screeningA3,
+    helpText: "Use the STAR method: Situation, Task, Action, Result. Include metrics.",
+  });
+
+  // ── ELIGIBILITY ────────────────────────────────────────────────────────────
+  questions.push({
+    id: "sq_years_exp",
+    question: `How many years of experience do you have in ${topSkill} or a closely related field?`,
+    type: "select",
+    category: "eligibility",
+    required: true,
+    options: ["Less than 1 year", "1 – 2 years", "2 – 3 years", "3 – 5 years", "5 – 7 years", "7+ years"],
+    suggestedAnswer: candidate.yearsOfExperience.includes("3") ? "3 – 5 years"
+      : candidate.yearsOfExperience.includes("5") ? "5 – 7 years"
+      : candidate.yearsOfExperience.includes("1") ? "1 – 2 years"
+      : "3 – 5 years",
+    helpText: "Select the range that best reflects your direct hands-on experience",
+  });
+
+  questions.push({
+    id: "sq_work_authorization",
+    question: "Are you legally authorized to work in this country without requiring visa sponsorship?",
+    type: "yesno",
+    category: "eligibility",
+    required: true,
+    options: ["Yes", "No"],
+    suggestedAnswer: "Yes",
+    helpText: "Most employers require legal work authorization. Answer truthfully.",
+  });
+
+  // ── SALARY ─────────────────────────────────────────────────────────────────
+  questions.push({
+    id: "sq_salary",
+    question: "What are your salary expectations for this role?",
+    type: "text",
+    category: "salary",
+    required: false,
+    suggestedAnswer: candidate.salaryExpectation || (job.salary_min && job.salary_max
+      ? `${job.currency || "KES"} ${job.salary_min.toLocaleString()} – ${job.salary_max.toLocaleString()}`
+      : "Negotiable based on full compensation package"),
+    helpText: "Tip: Quote a range aligned with the job's advertised salary band to avoid immediate elimination.",
+  });
+
+  // ── AVAILABILITY ────────────────────────────────────────────────────────────
+  questions.push({
+    id: "sq_start_date",
+    question: "What is your earliest available start date / notice period?",
+    type: "text",
+    category: "availability",
+    required: true,
+    suggestedAnswer: candidate.noticePeriod,
+    helpText: "Be accurate. Misrepresenting availability can lead to offer withdrawal.",
+  });
+
+  // ── MODE-SPECIFIC ──────────────────────────────────────────────────────────
+  if (job.mode === "Remote" || job.mode === "Hybrid") {
+    questions.push({
+      id: "sq_remote_setup",
+      question: "Do you have a reliable home office setup (internet, quiet workspace, equipment)?",
+      type: "yesno",
+      category: "eligibility",
+      required: job.mode === "Remote",
+      options: ["Yes", "No – but I can arrange one"],
+      suggestedAnswer: "Yes",
+      helpText: "Remote roles often require a dedicated workspace and minimum internet speed.",
+    });
+  }
+
+  // ── DESCRIPTION-DERIVED ─────────────────────────────────────────────────────
+  // Detect if job description mentions specific screening criteria
+  if (desc.includes("driver") || desc.includes("driving")) {
+    questions.push({
+      id: "sq_driving",
+      question: "Do you hold a valid driver's licence?",
+      type: "yesno",
+      category: "eligibility",
+      required: true,
+      options: ["Yes", "No"],
+      suggestedAnswer: "Yes",
+    });
+  }
+
+  if (desc.includes("clearance") || desc.includes("background check") || desc.includes("police")) {
+    questions.push({
+      id: "sq_clearance",
+      question: "Are you willing to undergo a background check / security clearance screening?",
+      type: "yesno",
+      category: "eligibility",
+      required: true,
+      options: ["Yes", "No"],
+      suggestedAnswer: "Yes",
+    });
+  }
+
+  if (desc.includes("language") || desc.includes("french") || desc.includes("swahili") || desc.includes("arabic")) {
+    questions.push({
+      id: "sq_language",
+      question: "What languages are you proficient in (spoken and written)?",
+      type: "text",
+      category: "eligibility",
+      required: false,
+      suggestedAnswer: "English (Fluent), Swahili (Native)",
+    });
+  }
+
+  if (desc.includes("travel") || desc.includes("field work") || desc.includes("site visits")) {
+    questions.push({
+      id: "sq_travel",
+      question: "Are you willing and able to travel as required by the role?",
+      type: "yesno",
+      category: "eligibility",
+      required: true,
+      options: ["Yes", "No"],
+      suggestedAnswer: "Yes",
+    });
+  }
+
+  if (skills.some(s => s.toLowerCase().includes("python") || s.toLowerCase().includes("sql") || s.toLowerCase().includes("java"))) {
+    questions.push({
+      id: "sq_coding",
+      question: `Rate your proficiency in ${topSkill} on a scale of 1–10.`,
+      type: "select",
+      category: "technical",
+      required: false,
+      options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+      suggestedAnswer: "8",
+      helpText: "Be honest — some portals follow up with a technical assessment that validates your self-rating.",
+    });
+  }
+
+  return questions;
+}
+
+/**
+ * Groups portal form fields by their section for tabbed display.
+ */
+export function groupPortalFieldsBySection(
+  fields: PortalFormField[]
+): Record<PortalFormField["section"], PortalFormField[]> {
+  return fields.reduce((acc, field) => {
+    if (!acc[field.section]) acc[field.section] = [];
+    acc[field.section].push(field);
+    return acc;
+  }, {} as Record<PortalFormField["section"], PortalFormField[]>);
+}
+
 // ─── Pre-Application Readiness Analysis Engine ────────────────────────────────
+
 
 export type ReadinessCheckStatus = "pass" | "warn" | "fail";
 

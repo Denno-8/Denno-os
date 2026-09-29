@@ -26,7 +26,12 @@ import {
   getReadinessColor,
   getReadinessLabel,
   analyzeJobApplicationChannel,
+  getPortalFormFields,
+  extractPortalScreeningQuestions,
+  groupPortalFieldsBySection,
   type ReadinessCheck,
+  type PortalFormField,
+  type PortalScreeningQuestion,
 } from "../utils/jobScrutiny";
 import { formatCleanSkillsString } from "../utils/skillSanitizer";
 import { API_URL, getAccessToken } from "../services/api";
@@ -96,7 +101,12 @@ export default function InAppWebPortalApplyStudio({
   const [screeningA1, setScreeningA1] = useState("");
   const [screeningA2, setScreeningA2] = useState("");
   const [screeningA3, setScreeningA3] = useState("");
-  const [formTab, setFormTab] = useState<"audit" | "personal" | "education" | "legal" | "screening" | "eeoc">("audit");
+  const [formTab, setFormTab] = useState<"audit" | "portal_form" | "job_screening" | "personal" | "education" | "legal" | "screening" | "eeoc">("audit");
+
+  // Portal form field values map (field.id => value), allows inline editing
+  const [portalFieldValues, setPortalFieldValues] = useState<Record<string, string>>({});
+  // Screening question answer overrides (question.id => answer)
+  const [screeningAnswers, setScreeningAnswers] = useState<Record<string, string>>({});
 
   const [coverLetter, setCoverLetter] = useState("");
   const [cvVersionId, setCvVersionId] = useState("");
@@ -544,26 +554,35 @@ ${coverLetter}`;
                     </div>
 
                     {/* Sub-Tab Navigation for Portal Forms */}
-                    <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900/70 p-1 rounded-xl text-xs overflow-x-auto">
+                    <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900/70 p-1 rounded-xl text-xs overflow-x-auto shrink-0">
                       {[
-                        { id: "audit",     label: "AI Scrutiny Audit" },
-                        { id: "personal",  label: "Personal & Socials" },
-                        { id: "education", label: "Education & Experience" },
-                        { id: "legal",     label: "Eligibility & Disclosures" },
-                        { id: "screening", label: "AI Screening Answers" },
-                        { id: "eeoc",      label: "EEOC Disclosures" },
+                        { id: "audit",          label: "Readiness Gate",           dot: readinessReport.blockerFailCount > 0 ? "rose" : "emerald" },
+                        { id: "portal_form",    label: "Portal Form Fields",        dot: "blue" },
+                        { id: "job_screening",  label: "Job Screening Q&A",         dot: "violet" },
+                        { id: "personal",       label: "Personal & Socials",        dot: null },
+                        { id: "education",      label: "Education & Experience",    dot: null },
+                        { id: "legal",          label: "Eligibility & Disclosures", dot: null },
+                        { id: "eeoc",           label: "EEOC Disclosures",          dot: null },
                       ].map((tab) => (
                         <button
                           key={tab.id}
                           type="button"
                           onClick={() => setFormTab(tab.id as any)}
-                          className={`px-3 py-1.5 rounded-lg font-extrabold text-[11px] whitespace-nowrap transition-all ${
+                          className={`relative px-3 py-1.5 rounded-lg font-extrabold text-[11px] whitespace-nowrap transition-all ${
                             formTab === tab.id
                               ? "bg-blue-600 text-white shadow-sm"
                               : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                           }`}
                         >
                           {tab.label}
+                          {tab.dot && (
+                            <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${
+                              tab.dot === "rose" ? "bg-rose-500" :
+                              tab.dot === "emerald" ? "bg-emerald-500" :
+                              tab.dot === "blue" ? "bg-blue-400" :
+                              "bg-violet-400"
+                            }`} />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -977,6 +996,348 @@ ${coverLetter}`;
                         </div>
                       </div>
                     )}
+
+                    {/* TAB: Portal Form Fields — all fields the portal will ask, pre-filled */}
+                    {formTab === "portal_form" && (() => {
+                      const candidateProfile = {
+                        fullName, email, phone, location, linkedinUrl, githubUrl,
+                        highestEducation, institutionName, yearsOfExperience,
+                        currentEmployer, salaryExpectation, noticePeriod,
+                        workAuthorization, visaSponsorship, relocationPreference,
+                        idNumber, kraPin, eeoGender, eeoDisability, eeoVeteran,
+                      };
+                      const allFields = getPortalFormFields(job.source_url || "", candidateProfile);
+                      const grouped = groupPortalFieldsBySection(allFields);
+
+                      const sectionMeta: Record<string, { label: string; icon: string; color: string }> = {
+                        personal:    { label: "Personal Details",         icon: "👤", color: "blue" },
+                        education:   { label: "Education & Qualifications",icon: "🎓", color: "violet" },
+                        experience:  { label: "Work Experience",           icon: "💼", color: "indigo" },
+                        eligibility: { label: "Eligibility & Availability",icon: "✅", color: "emerald" },
+                        salary:      { label: "Salary Expectation",        icon: "💰", color: "amber" },
+                        documents:   { label: "Required Documents",        icon: "📎", color: "rose" },
+                        eeoc:        { label: "EEO / Diversity Disclosures",icon: "⚖️", color: "slate" },
+                      };
+
+                      const fieldClass = "w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-semibold outline-none focus:border-blue-500 text-xs transition-colors";
+
+                      const getValue = (field: PortalFormField) =>
+                        portalFieldValues[field.id] ?? field.defaultValue ?? "";
+
+                      const setValue = (id: string, val: string) =>
+                        setPortalFieldValues(prev => ({ ...prev, [id]: val }));
+
+                      const requiredFields = allFields.filter(f => f.required);
+                      const filledRequired = requiredFields.filter(f => getValue(f).trim().length > 0);
+                      const completionPct = requiredFields.length > 0
+                        ? Math.round((filledRequired.length / requiredFields.length) * 100) : 100;
+
+                      return (
+                        <div className="space-y-4 text-xs">
+                          {/* Header with completion */}
+                          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl">
+                            <div>
+                              <div className="font-extrabold text-blue-800 dark:text-blue-200">Portal Application Form — Pre-filled</div>
+                              <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
+                                {filledRequired.length}/{requiredFields.length} required fields completed · Copy values into the portal form
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="relative w-10 h-10">
+                                <svg className="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+                                  <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" className="text-blue-200 dark:text-blue-800" strokeWidth="4" />
+                                  <circle cx="20" cy="20" r="16" fill="none" strokeWidth="4"
+                                    stroke={completionPct === 100 ? "#10b981" : "#3b82f6"}
+                                    strokeDasharray={`${(completionPct / 100) * 100.5} 100.5`}
+                                    strokeLinecap="round" />
+                                </svg>
+                                <span className="absolute inset-0 flex items-center justify-center font-extrabold text-[10px] text-blue-700 dark:text-blue-300">{completionPct}%</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Sections */}
+                          {(Object.entries(sectionMeta) as [PortalFormField["section"], typeof sectionMeta[string]][]).map(([section, meta]) => {
+                            const sectionFields = grouped[section];
+                            if (!sectionFields || sectionFields.length === 0) return null;
+                            return (
+                              <div key={section} className="space-y-2">
+                                {/* Section header */}
+                                <div className="flex items-center gap-2 font-extrabold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-1">
+                                  <span>{meta.icon}</span>
+                                  <span>{meta.label}</span>
+                                  <span className="ml-auto text-[10px] font-normal text-slate-400">
+                                    {sectionFields.filter(f => f.required).length} required
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {sectionFields.map((field) => {
+                                    const val = getValue(field);
+                                    const isEmpty = !val.trim();
+                                    const hasError = field.required && isEmpty;
+
+                                    return (
+                                      <div key={field.id} className={field.type === "textarea" || field.id === "field_of_study" ? "sm:col-span-2" : ""}>
+                                        {/* Label row */}
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className={`font-semibold flex items-center gap-1 ${
+                                            hasError ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"
+                                          }`}>
+                                            {field.label}
+                                            {field.required && (
+                                              <span className="text-rose-500 font-black">*</span>
+                                            )}
+                                          </label>
+                                          {field.type === "file" ? (
+                                            <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-black rounded">
+                                              UPLOAD IN PORTAL
+                                            </span>
+                                          ) : hasError ? (
+                                            <span className="px-1.5 py-0.5 bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 text-[10px] font-black rounded flex items-center gap-1">
+                                              <AlertCircle size={9} /> REQUIRED
+                                            </span>
+                                          ) : val ? (
+                                            <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded flex items-center gap-1">
+                                              <CheckCircle2 size={9} /> FILLED
+                                            </span>
+                                          ) : null}
+                                        </div>
+
+                                        {/* Input */}
+                                        {field.type === "file" ? (
+                                          <div className="p-2.5 bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                            <FileText size={13} className="text-blue-400 shrink-0" />
+                                            <span>Upload this file directly in the portal form. Use the CV downloaded from the CV Manager above.</span>
+                                          </div>
+                                        ) : field.type === "select" || field.type === "yesno" ? (
+                                          <select
+                                            value={val}
+                                            onChange={e => setValue(field.id, e.target.value)}
+                                            className={`${fieldClass} ${hasError ? "border-rose-400" : ""}`}
+                                          >
+                                            {!val && <option value="">— Select —</option>}
+                                            {field.options?.map(opt => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        ) : field.type === "textarea" ? (
+                                          <textarea
+                                            rows={3}
+                                            value={val}
+                                            onChange={e => setValue(field.id, e.target.value)}
+                                            placeholder={field.placeholder}
+                                            className={`${fieldClass} resize-none ${hasError ? "border-rose-400" : ""}`}
+                                          />
+                                        ) : (
+                                          <input
+                                            type={field.type === "url" ? "url" : field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
+                                            value={val}
+                                            onChange={e => setValue(field.id, e.target.value)}
+                                            placeholder={field.placeholder}
+                                            className={`${fieldClass} ${hasError ? "border-rose-400" : ""}`}
+                                          />
+                                        )}
+
+                                        {/* Help text / validation note */}
+                                        {(field.helpText || field.validationNote) && (
+                                          <div className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                                            {field.validationNote && (
+                                              <span className="text-amber-600 dark:text-amber-400 font-semibold">{field.validationNote}. </span>
+                                            )}
+                                            {field.helpText}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Copy to clipboard CTA */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const summary = allFields.map(f =>
+                                `${f.label}: ${getValue(f) || "(blank)"}`
+                              ).join("\n");
+                              try { await navigator.clipboard.writeText(summary); } catch {}
+                              setCopiedPayload(true);
+                              setTimeout(() => setCopiedPayload(false), 2000);
+                            }}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all"
+                          >
+                            <Copy size={13} />
+                            {copiedPayload ? "Copied to Clipboard!" : "Copy All Portal Form Values to Clipboard"}
+                          </button>
+                        </div>
+                      );
+                    })()}
+
+                    {/* TAB: Job-Specific Screening Questions */}
+                    {formTab === "job_screening" && (() => {
+                      const candidateProfile = {
+                        fullName, email, location, yearsOfExperience,
+                        salaryExpectation, noticePeriod,
+                        screeningA1, screeningA2, screeningA3,
+                      };
+                      const questions = extractPortalScreeningQuestions(job, candidateProfile);
+
+                      const categoryMeta: Record<string, { label: string; color: string }> = {
+                        motivation:   { label: "Motivation",      color: "blue" },
+                        technical:    { label: "Technical",       color: "indigo" },
+                        behavioral:   { label: "Behavioural",     color: "violet" },
+                        eligibility:  { label: "Eligibility",     color: "emerald" },
+                        salary:       { label: "Salary",          color: "amber" },
+                        availability: { label: "Availability",    color: "cyan" },
+                        experience:   { label: "Experience",      color: "purple" },
+                      };
+
+                      const getAnswer = (q: PortalScreeningQuestion) =>
+                        screeningAnswers[q.id] ?? q.suggestedAnswer ?? "";
+
+                      const setAnswer = (id: string, val: string) =>
+                        setScreeningAnswers(prev => ({ ...prev, [id]: val }));
+
+                      const filledCount = questions.filter(q => getAnswer(q).trim().length > 0).length;
+
+                      return (
+                        <div className="space-y-3 text-xs">
+                          {/* Header */}
+                          <div className="p-3 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 rounded-2xl flex items-center justify-between">
+                            <div>
+                              <div className="font-extrabold text-violet-800 dark:text-violet-200">Job-Specific Portal Screening Questions</div>
+                              <div className="text-[11px] text-violet-600 dark:text-violet-400 mt-0.5">
+                                {filledCount}/{questions.length} questions answered · Pre-filled from your profile + AI responses
+                              </div>
+                            </div>
+                            <div className="px-2.5 py-1 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 text-[11px] font-black rounded-lg">
+                              {job.company_name}
+                            </div>
+                          </div>
+
+                          {questions.map((q, idx) => {
+                            const answer = getAnswer(q);
+                            const wordCount = answer.trim().split(/\s+/).filter(Boolean).length;
+                            const cat = categoryMeta[q.category] || { label: q.category, color: "slate" };
+                            const colorMap: Record<string, string> = {
+                              blue:   "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+                              indigo: "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300",
+                              violet: "bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300",
+                              emerald:"bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300",
+                              amber:  "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300",
+                              cyan:   "bg-cyan-100 dark:bg-cyan-900 text-cyan-700 dark:text-cyan-300",
+                              purple: "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300",
+                              slate:  "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+                            };
+
+                            return (
+                              <div key={q.id} className="p-3 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
+                                {/* Question header */}
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                                    <span className="w-5 h-5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-extrabold text-[10px] shrink-0 mt-0.5">
+                                      {idx + 1}
+                                    </span>
+                                    <div className="font-extrabold text-slate-800 dark:text-slate-100 leading-snug">
+                                      {q.question}
+                                      {q.required && <span className="text-rose-500 ml-1">*</span>}
+                                    </div>
+                                  </div>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${colorMap[cat.color]}`}>
+                                    {cat.label}
+                                  </span>
+                                </div>
+
+                                {/* Input */}
+                                {q.type === "textarea" ? (
+                                  <textarea
+                                    rows={3}
+                                    value={answer}
+                                    onChange={e => setAnswer(q.id, e.target.value)}
+                                    placeholder="Type your answer here or edit the pre-filled response..."
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs text-slate-900 dark:text-white outline-none focus:border-violet-500 font-medium resize-none leading-relaxed"
+                                  />
+                                ) : q.type === "select" ? (
+                                  <select
+                                    value={answer}
+                                    onChange={e => setAnswer(q.id, e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-semibold outline-none focus:border-violet-500"
+                                  >
+                                    {!answer && <option value="">— Select —</option>}
+                                    {q.options?.map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                ) : q.type === "yesno" ? (
+                                  <div className="flex gap-2">
+                                    {(q.options || ["Yes", "No"]).map(opt => (
+                                      <button
+                                        key={opt}
+                                        type="button"
+                                        onClick={() => setAnswer(q.id, opt)}
+                                        className={`flex-1 py-2 rounded-xl font-extrabold text-[11px] border transition-all ${
+                                          answer === opt
+                                            ? opt === "Yes"
+                                              ? "bg-emerald-600 text-white border-emerald-600"
+                                              : "bg-rose-600 text-white border-rose-600"
+                                            : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400"
+                                        }`}
+                                      >
+                                        {opt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={answer}
+                                    onChange={e => setAnswer(q.id, e.target.value)}
+                                    placeholder="Type your answer..."
+                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-semibold outline-none focus:border-violet-500"
+                                  />
+                                )}
+
+                                {/* Footer: word count + help text */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-[10px] text-slate-400 dark:text-slate-500 flex-1">
+                                    {q.helpText}
+                                  </div>
+                                  {q.type === "textarea" && (
+                                    <span className={`text-[10px] font-bold shrink-0 ${
+                                      wordCount >= 40 ? "text-emerald-600 dark:text-emerald-400" :
+                                      wordCount >= 20 ? "text-amber-600 dark:text-amber-400" :
+                                      "text-rose-500"
+                                    }`}>
+                                      {wordCount} words {wordCount < 30 ? "— aim for 30+" : wordCount < 40 ? "— good" : "✓"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Copy all answers */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const text = questions.map((q, i) =>
+                                `Q${i+1}. ${q.question}\nA: ${getAnswer(q) || "(blank)"}\n`
+                              ).join("\n");
+                              try { await navigator.clipboard.writeText(text); } catch {}
+                              setCopiedPayload(true);
+                              setTimeout(() => setCopiedPayload(false), 2000);
+                            }}
+                            className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all"
+                          >
+                            <Copy size={13} />
+                            {copiedPayload ? "Copied!" : "Copy All Q&A Answers to Clipboard"}
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* TAB 4: AI Screening Question Answers */}
                     {formTab === "screening" && (
