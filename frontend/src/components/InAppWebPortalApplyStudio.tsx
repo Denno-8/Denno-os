@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   X, CheckCircle2, AlertCircle, FileText, ExternalLink, Sparkles, Send,
   User, Mail, Phone, MapPin, DollarSign, Clock, ShieldCheck, Wand2, RefreshCw,
@@ -22,6 +22,11 @@ import {
   getPortalTips,
   _extractPortalPlatformFromUrl,
   extractApplicationDeadline,
+  analyzeApplicationReadiness,
+  getReadinessColor,
+  getReadinessLabel,
+  analyzeJobApplicationChannel,
+  type ReadinessCheck,
 } from "../utils/jobScrutiny";
 import { formatCleanSkillsString } from "../utils/skillSanitizer";
 import { API_URL, getAccessToken } from "../services/api";
@@ -52,6 +57,8 @@ export default function InAppWebPortalApplyStudio({
   const [portalChecklistChecked, setPortalChecklistChecked] = useState<boolean[]>([]);
   const [showPortalTips, setShowPortalTips] = useState(false);
   const [showAtsProcedures, setShowAtsProcedures] = useState(true);
+  const [showReadinessPanel, setShowReadinessPanel] = useState(true);
+  const [readinessAcknowledged, setReadinessAcknowledged] = useState(false);
 
   // ── Derived user defaults (real profile data) ─────────────────────────
   const userFullName =
@@ -221,6 +228,38 @@ ${candidateEmail}.`;
 
   const selectedCV = cvVersions.find((c) => c.id === cvVersionId);
   const scrutinyData = extractResponsibilitiesAndRequirements(job.description, job.requirements, job.required_skills);
+  const jobChannel = analyzeJobApplicationChannel(job);
+  const isPortalJobForced = job.apply_method === "website" || job.apply_method === "portal";
+
+  // ── Live Readiness Report ──────────────────────────────────────────
+  const readinessReport = analyzeApplicationReadiness({
+    fullName,
+    email,
+    phone,
+    location,
+    cvVersionId,
+    cvAtsScore: selectedCV?.ats_score,
+    cvName: selectedCV?.name,
+    coverLetter,
+    screeningA1,
+    screeningA2,
+    screeningA3,
+    applyMethod: "website",
+    job,
+    salaryExpectation,
+    noticePeriod,
+    idNumber,
+    kraPin,
+  });
+
+  const canProceedToPortal = readinessReport.isReadyToProceed;
+  const readinessColor = getReadinessColor(readinessReport.readinessScore);
+  const readinessLabel = getReadinessLabel(readinessReport.readinessScore, readinessReport.blockerFailCount);
+
+  // Categorized check lists for display
+  const blockerChecks = readinessReport.checks.filter(c => c.status === "fail" && c.isBlocker);
+  const warnChecks = readinessReport.checks.filter(c => c.status === "warn");
+  const failChecks = readinessReport.checks.filter(c => c.status === "fail" && !c.isBlocker);
 
   // ── CV actions ─────────────────────────────────────────────────────────
   const handleGenerateTailoredCV = () => {
@@ -531,56 +570,197 @@ ${coverLetter}`;
 
                     {/* ── Sub-Tab Content ── */}
 
-                    {/* TAB 1: Pre-Application AI Scrutiny Audit */}
+                    {/* TAB 1: Pre-Application AI Readiness Gate */}
                     {formTab === "audit" && (
-                      <div className="space-y-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                        <div className="flex items-center justify-between font-extrabold text-slate-900 dark:text-white">
-                          <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                            <Sparkles size={14} /> AI Application Verdict &amp; Compatibility Analysis
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black text-[10px]">
-                            HIGHLY RECOMMENDED
-                          </span>
+                      <div className="space-y-3 text-xs">
+
+                        {/* ── Readiness Score Banner ── */}
+                        <div className={`p-4 rounded-2xl border flex items-center gap-4 ${
+                          readinessColor === "emerald" ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800" :
+                          readinessColor === "amber" ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800" :
+                          "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800"
+                        }`}>
+                          {/* Score Ring */}
+                          <div className="relative w-16 h-16 shrink-0">
+                            <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                              <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor"
+                                className="text-slate-200 dark:text-slate-700" strokeWidth="6" />
+                              <circle cx="32" cy="32" r="26" fill="none" strokeWidth="6"
+                                stroke={readinessColor === "emerald" ? "#10b981" : readinessColor === "amber" ? "#f59e0b" : "#f43f5e"}
+                                strokeDasharray={`${(readinessReport.readinessScore / 100) * 163.4} 163.4`}
+                                strokeLinecap="round" />
+                            </svg>
+                            <span className={`absolute inset-0 flex items-center justify-center font-extrabold text-sm ${
+                              readinessColor === "emerald" ? "text-emerald-700 dark:text-emerald-300" :
+                              readinessColor === "amber" ? "text-amber-700 dark:text-amber-300" :
+                              "text-rose-700 dark:text-rose-300"
+                            }`}>{readinessReport.readinessScore}%</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className={`font-extrabold text-sm ${
+                              readinessColor === "emerald" ? "text-emerald-800 dark:text-emerald-200" :
+                              readinessColor === "amber" ? "text-amber-800 dark:text-amber-200" :
+                              "text-rose-800 dark:text-rose-200"
+                            }`}>{readinessLabel}</div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                <CheckCircle2 size={11} /> {readinessReport.passCount} passed
+                              </span>
+                              {readinessReport.warnCount > 0 && (
+                                <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
+                                  <AlertTriangle size={11} /> {readinessReport.warnCount} warnings
+                                </span>
+                              )}
+                              {readinessReport.failCount > 0 && (
+                                <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
+                                  <AlertCircle size={11} /> {readinessReport.failCount} failed
+                                </span>
+                              )}
+                            </div>
+                            {readinessReport.blockerFailCount > 0 && (
+                              <div className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-300 font-semibold">
+                                {readinessReport.blockerFailCount} blocker{readinessReport.blockerFailCount > 1 ? "s" : ""} must be resolved before advancing to the portal.
+                              </div>
+                            )}
+                          </div>
                         </div>
 
+                        {/* ── Channel Conflict Hard Block ── */}
+                        {readinessReport.channelConflict && (
+                          <div className="p-3 bg-rose-100 dark:bg-rose-950 border-2 border-rose-500 rounded-2xl flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                              <AlertTriangle size={16} />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-rose-800 dark:text-rose-200 text-xs">PORTAL APPLICATION REQUIRED — EMAIL DISPATCH BLOCKED</div>
+                              <div className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5">{readinessReport.channelConflictReason}</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Blocker Checks (Red) ── */}
+                        {blockerChecks.length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 font-extrabold text-rose-700 dark:text-rose-400 uppercase tracking-wider text-[10px]">
+                              <AlertCircle size={12} /> Blockers — Must Fix Before Proceeding
+                            </div>
+                            {blockerChecks.map((chk) => (
+                              <div key={chk.id} className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-xl space-y-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle size={13} className="text-rose-500 shrink-0 mt-0.5" />
+                                    <div>
+                                      <div className="font-extrabold text-rose-800 dark:text-rose-200">{chk.label}</div>
+                                      <div className="text-rose-600 dark:text-rose-400">{chk.detail}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                {chk.fixHint && (
+                                  <div className="ml-5 flex items-start gap-1.5 text-rose-700 dark:text-rose-300">
+                                    <ArrowRight size={10} className="shrink-0 mt-0.5" />
+                                    <span>Fix: {chk.fixHint}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* ── Warning Checks (Amber) ── */}
+                        {warnChecks.length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider text-[10px]">
+                              <AlertTriangle size={12} /> Warnings — Review Before Submitting
+                            </div>
+                            {warnChecks.map((chk) => (
+                              <div key={chk.id} className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl space-y-1">
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                                  <div>
+                                    <div className="font-extrabold text-amber-800 dark:text-amber-200">{chk.label}</div>
+                                    <div className="text-amber-700 dark:text-amber-400">{chk.detail}</div>
+                                  </div>
+                                </div>
+                                {chk.fixHint && (
+                                  <div className="ml-5 flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
+                                    <ArrowRight size={10} className="shrink-0 mt-0.5" />
+                                    <span>Tip: {chk.fixHint}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* ── Passed Checks (Collapsed) ── */}
+                        {readinessReport.passCount > 0 && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-[10px]">
+                              <CheckCircle2 size={12} /> Passed Checks ({readinessReport.passCount})
+                            </div>
+                            <div className="grid grid-cols-1 gap-1">
+                              {readinessReport.checks.filter(c => c.status === "pass").map((chk) => (
+                                <div key={chk.id} className="flex items-center gap-2 p-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900 rounded-lg">
+                                  <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                                  <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{chk.label}</span>
+                                  {chk.detail && <span className="text-emerald-600 dark:text-emerald-400 ml-auto text-[10px]">{chk.detail}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Job Requirements Alignment ── */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                           <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
-                            <div className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300">
-                              Extracted Core Requirements:
+                            <div className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <ListChecks size={12} className="text-blue-500" /> Extracted Requirements:
                             </div>
                             <ul className="space-y-1 pl-4 text-slate-600 dark:text-slate-400 list-disc text-[11px]">
-                              {scrutinyData.requirements.slice(0, 3).map((req, i) => (
+                              {scrutinyData.requirements.slice(0, 4).map((req, i) => (
                                 <li key={i}>{req}</li>
                               ))}
                             </ul>
                           </div>
-
                           <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
-                            <div className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300">
-                              Key Skill Alignment:
+                            <div className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <Target size={12} className="text-emerald-500" /> Matched Skills:
                             </div>
-                            <div className="flex flex-wrap gap-1 pt-1">
+                            <div className="flex flex-wrap gap-1 pt-0.5">
                               {(job.required_skills && job.required_skills.length > 0
                                 ? job.required_skills
                                 : ["Python", "FastAPI", "React", "SQL"]
                               ).map((sk, i) => (
-                                <span
-                                  key={i}
-                                  className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-500/20 flex items-center gap-1"
-                                >
-                                  <Check size={10} /> {sk}
+                                <span key={i} className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-500/20 flex items-center gap-1">
+                                  <Check size={9} /> {sk}
                                 </span>
                               ))}
                             </div>
                           </div>
                         </div>
 
-                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-200 flex items-start gap-2">
-                          <CheckCircle2 size={15} className="shrink-0 mt-0.5 text-emerald-500" />
-                          <div>
-                            <strong>Pre-Application Scrutiny Summary:</strong> Your profile and attached ATS resume version have been verified against <strong>{job.company_name}</strong>'s role expectations. Candidate data, legal disclosures, and AI screening responses are pre-filled below and ready for dispatch.
+                        {/* ── Proceed Gate Confirmation ── */}
+                        {canProceedToPortal ? (
+                          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-start gap-2">
+                            <CheckCircle2 size={15} className="shrink-0 mt-0.5 text-emerald-500" />
+                            <div>
+                              <div className="font-extrabold text-emerald-800 dark:text-emerald-200">All critical requirements met — ready to advance to portal!</div>
+                              <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                                Your profile, CV, cover letter and screening answers have been verified. Click <strong>Next Step</strong> to open the live portal with your payload pre-loaded.
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-start gap-2">
+                            <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-500" />
+                            <div>
+                              <div className="font-extrabold text-rose-800 dark:text-rose-200">Cannot advance — {readinessReport.blockerFailCount} blocker{readinessReport.blockerFailCount > 1 ? "s" : ""} must be resolved</div>
+                              <div className="text-[11px] text-rose-700 dark:text-rose-400 mt-0.5">
+                                Fix the red items above by switching to the relevant tab (Personal, CV, Cover Letter, or Screening Answers).
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1557,50 +1737,86 @@ ${coverLetter}`;
           </div>
         )}
 
-        {/* ── Footer Actions ─────────────────────────────────────────────────── */}
+        {/* ── Footer Actions ──────────────────────────────────────────────── */}
         {activeStep !== "success" && (
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl"
-            >
-              Cancel
-            </button>
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-3 shrink-0">
+            {/* Blocker warning bar — only when on form step with issues */}
+            {activeStep === "form" && !canProceedToPortal && (
+              <div className="flex items-start gap-2.5 p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-xl text-[11px]">
+                <AlertCircle size={13} className="text-rose-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-rose-700 dark:text-rose-300">Cannot advance: </span>
+                  <span className="text-rose-600 dark:text-rose-400">
+                    {blockerChecks.map(c => c.label).join(" · ")} — fix these in the relevant tab above, then return to <strong>AI Scrutiny Audit</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {activeStep !== "review" && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveStep((s) =>
-                      s === "form" ? "portal" : s === "portal" ? "review" : "review"
-                    )
-                  }
-                  className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2"
-                >
-                  Next Step <ArrowRight size={14} />
-                </button>
-              )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl"
+              >
+                Cancel
+              </button>
 
-              {activeStep === "review" && (
-                <button
-                  type="button"
-                  onClick={handleFinalSubmit}
-                  disabled={isSubmitting}
-                  className="w-full sm:w-auto py-3 px-8 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <span>Submitting &amp; Verifying Application…</span>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={16} />
-                      <span>Confirm &amp; Submit Application</span>
-                      <ArrowRight size={14} />
-                    </>
-                  )}
-                </button>
-              )}
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                {/* Next Step (form → portal) — GATED */}
+                {activeStep === "form" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!canProceedToPortal) {
+                        setFormTab("audit");
+                        return;
+                      }
+                      handleAutoFillPortalForm();
+                    }}
+                    title={!canProceedToPortal ? `Fix ${readinessReport.blockerFailCount} blocker(s) before advancing` : "Proceed to Live Portal"}
+                    className={`w-full sm:w-auto px-6 py-2.5 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all ${
+                      canProceedToPortal
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70"
+                    }`}
+                  >
+                    {canProceedToPortal ? (
+                      <><Zap size={14} className="text-amber-300" /> Open Live Portal <ArrowRight size={13} /></>
+                    ) : (
+                      <><AlertCircle size={14} /> Fix {readinessReport.blockerFailCount} Blocker{readinessReport.blockerFailCount > 1 ? "s" : ""} First</>
+                    )}
+                  </button>
+                )}
+
+                {/* Next Step (portal → review) */}
+                {activeStep === "portal" && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveStep("review")}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all"
+                  >
+                    Review Application <ArrowRight size={14} />
+                  </button>
+                )}
+
+                {/* Final Submit — Review step */}
+                {activeStep === "review" && (
+                  <button
+                    type="button"
+                    onClick={handleFinalSubmit}
+                    disabled={isSubmitting || !canProceedToPortal}
+                    title={!canProceedToPortal ? "Readiness blockers prevent submission" : "Submit application"}
+                    className="w-full sm:w-auto py-3 px-8 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Submitting &amp; Verifying…</>
+                    ) : (
+                      <><CheckCircle2 size={16} /><span>Confirm &amp; Submit Application</span><ArrowRight size={14} /></>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

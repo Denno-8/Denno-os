@@ -759,7 +759,6 @@ export function extractResponsibilitiesAndRequirements(
  * Detect if a job description contains deadline/closing date information.
  */
 export function extractApplicationDeadline(description: string = "", notes: string = ""): string | null {
-  const combined = (description + " " + notes).toLowerCase();
   const deadlinePatterns = [
     /deadline[:\s]+([a-z]+ \d{1,2},?\s*\d{4})/i,
     /closing date[:\s]+([a-z]+ \d{1,2},?\s*\d{4})/i,
@@ -776,3 +775,383 @@ export function extractApplicationDeadline(description: string = "", notes: stri
   }
   return null;
 }
+
+// ─── Pre-Application Readiness Analysis Engine ────────────────────────────────
+
+export type ReadinessCheckStatus = "pass" | "warn" | "fail";
+
+export interface ReadinessCheck {
+  id: string;
+  category: "identity" | "cv" | "cover_letter" | "screening" | "channel" | "documents" | "profile";
+  label: string;
+  description: string;
+  status: ReadinessCheckStatus;
+  detail?: string;
+  /** If true, this is a blocker — cannot proceed without passing */
+  isBlocker: boolean;
+  /** Optional fix hint shown to the user */
+  fixHint?: string;
+}
+
+export interface ReadinessReport {
+  checks: ReadinessCheck[];
+  passCount: number;
+  warnCount: number;
+  failCount: number;
+  blockerFailCount: number;
+  readinessScore: number; // 0-100
+  isReadyToProceed: boolean;
+  isPortalApplication: boolean;
+  channelConflict: boolean; // email attempted on portal-only job
+  channelConflictReason: string;
+}
+
+export interface ReadinessInput {
+  // Candidate identity
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  // CV
+  cvVersionId: string;
+  cvAtsScore?: number;
+  cvName?: string;
+  // Cover letter
+  coverLetter: string;
+  // Screening answers
+  screeningA1: string;
+  screeningA2: string;
+  screeningA3: string;
+  // Channel info
+  applyMethod: "website" | "email";
+  // Job context
+  job: {
+    source_url?: string | null;
+    contact_email?: string | null;
+    recruiter_email?: string | null;
+    apply_method?: string | null;
+    description?: string | null;
+    requirements?: string[] | null;
+    required_skills?: string[] | null;
+    company_name: string;
+    title: string;
+  };
+  // Optional extra
+  salaryExpectation?: string;
+  noticePeriod?: string;
+  idNumber?: string;
+  kraPin?: string;
+}
+
+/**
+ * Analyzes all application readiness criteria before portal or email submission.
+ * Returns a comprehensive report with pass/warn/fail status for each check.
+ */
+export function analyzeApplicationReadiness(input: ReadinessInput): ReadinessReport {
+  const checks: ReadinessCheck[] = [];
+
+  const jobChannel = analyzeJobApplicationChannel(input.job);
+  const portalInfo = getPortalPlatformInfo(input.job.source_url || "");
+  const isPortalApp = jobChannel.channel === "website" || input.applyMethod === "website";
+
+  // ── Channel conflict detection ──────────────────────────────────────────────
+  // A conflict exists when: the job signals portal-only but email is selected,
+  // OR when portal fields are blank but email is selected for a portal job.
+  const hasPortalUrl = !!(input.job.source_url?.startsWith("http"));
+  const hasRecruiterEmail = !!(input.job.recruiter_email || input.job.contact_email);
+  const jobForcesWebsite = input.job.apply_method === "website" || input.job.apply_method === "portal";
+  const channelConflict = jobForcesWebsite && input.applyMethod === "email";
+  const channelConflictReason = channelConflict
+    ? `This job requires portal/website application (apply_method="${input.job.apply_method}"). Email dispatch is not permitted for this role.`
+    : hasPortalUrl && !hasRecruiterEmail && input.applyMethod === "email"
+    ? "This job has a portal URL but no recruiter email. Switching to email dispatch may result in application loss."
+    : "";
+
+  // ─── 1. IDENTITY CHECKS ─────────────────────────────────────────────────────
+
+  checks.push({
+    id: "name",
+    category: "identity",
+    label: "Full Name",
+    description: "Applicant full name must be present",
+    status: input.fullName.trim().length >= 3 ? "pass" : "fail",
+    detail: input.fullName.trim() || "Not provided",
+    isBlocker: true,
+    fixHint: "Enter your full name in the Personal & Socials tab",
+  });
+
+  checks.push({
+    id: "email",
+    category: "identity",
+    label: "Email Address",
+    description: "Valid email address required for portal registration and correspondence",
+    status: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email) ? "pass" : "fail",
+    detail: input.email || "Not provided",
+    isBlocker: true,
+    fixHint: "Enter a valid email address in the Personal & Socials tab",
+  });
+
+  checks.push({
+    id: "phone",
+    category: "identity",
+    label: "Phone Number",
+    description: "Phone number is required by most portals for shortlisting and interview scheduling",
+    status: input.phone.trim().length >= 7 ? "pass" : "warn",
+    detail: input.phone.trim() || "Not provided",
+    isBlocker: false,
+    fixHint: "Add your phone number (e.g. +254 7XX XXX XXX) in the Personal tab",
+  });
+
+  checks.push({
+    id: "location",
+    category: "identity",
+    label: "Location / City",
+    description: "Location is required for eligibility screening (remote/on-site) and work authorization",
+    status: input.location.trim().length >= 2 ? "pass" : "warn",
+    detail: input.location.trim() || "Not provided",
+    isBlocker: false,
+    fixHint: "Add your city/location in the Personal tab (e.g. Nairobi, Kenya)",
+  });
+
+  // ─── 2. CV CHECKS ──────────────────────────────────────────────────────────
+
+  checks.push({
+    id: "cv_attached",
+    category: "cv",
+    label: "CV / Resume Attached",
+    description: "A CV version must be selected and attached to the application",
+    status: input.cvVersionId ? "pass" : "fail",
+    detail: input.cvName || (input.cvVersionId ? "Attached" : "No CV selected"),
+    isBlocker: true,
+    fixHint: "Select a CV version from the dropdown or click 'Auto-Generate Tailored CV'",
+  });
+
+  if (input.cvVersionId) {
+    const atsScore = input.cvAtsScore ?? 0;
+    checks.push({
+      id: "cv_ats_score",
+      category: "cv",
+      label: "CV ATS Compliance Score",
+      description: "ATS score should be ≥70% to pass automated screening. Scores below 60% are likely rejected.",
+      status: atsScore >= 75 ? "pass" : atsScore >= 60 ? "warn" : "fail",
+      detail: `${atsScore}% ATS Score (${atsScore >= 75 ? "Good" : atsScore >= 60 ? "Borderline" : "Below threshold"})`,
+      isBlocker: false,
+      fixHint: atsScore < 70
+        ? "Use 'Auto-Generate Tailored CV' to create a job-specific version with higher ATS compliance"
+        : undefined,
+    });
+  }
+
+  // ─── 3. COVER LETTER CHECKS ────────────────────────────────────────────────
+
+  const coverLetterWordCount = input.coverLetter.trim().split(/\s+/).filter(Boolean).length;
+  checks.push({
+    id: "cover_letter",
+    category: "cover_letter",
+    label: "Cover Letter",
+    description: "Cover letter should be present and substantive (minimum 80 words recommended)",
+    status: coverLetterWordCount >= 100 ? "pass" : coverLetterWordCount >= 50 ? "warn" : "fail",
+    detail: coverLetterWordCount > 0
+      ? `${coverLetterWordCount} words written`
+      : "Cover letter is empty",
+    isBlocker: true,
+    fixHint: coverLetterWordCount < 80
+      ? "Click 'Regenerate' on the cover letter section to generate a tailored letter, then personalize it"
+      : undefined,
+  });
+
+  const hasCompanyName = input.coverLetter.toLowerCase().includes(input.job.company_name.toLowerCase());
+  checks.push({
+    id: "cover_letter_personalized",
+    category: "cover_letter",
+    label: "Cover Letter Personalization",
+    description: `Cover letter must specifically mention ${input.job.company_name} to avoid generic rejection`,
+    status: hasCompanyName ? "pass" : "warn",
+    detail: hasCompanyName
+      ? `Company name "${input.job.company_name}" found in letter`
+      : `Company name "${input.job.company_name}" not found — letter may appear generic`,
+    isBlocker: false,
+    fixHint: !hasCompanyName
+      ? `Edit your cover letter to explicitly mention ${input.job.company_name} and why you want to join specifically`
+      : undefined,
+  });
+
+  // ─── 4. SCREENING QUESTION CHECKS ──────────────────────────────────────────
+
+  if (isPortalApp) {
+    const s1Words = input.screeningA1.trim().split(/\s+/).filter(Boolean).length;
+    checks.push({
+      id: "screening_q1",
+      category: "screening",
+      label: "Screening Q1: Motivation / Why This Company",
+      description: "Answer for 'Why do you want to join us?' must be substantive (≥30 words)",
+      status: s1Words >= 40 ? "pass" : s1Words >= 20 ? "warn" : "fail",
+      detail: s1Words > 0 ? `${s1Words} words` : "Empty — portals reject blank screening answers",
+      isBlocker: false,
+      fixHint: s1Words < 30 ? "Expand your answer to mention the company mission and how your skills align" : undefined,
+    });
+
+    const s2Words = input.screeningA2.trim().split(/\s+/).filter(Boolean).length;
+    checks.push({
+      id: "screening_q2",
+      category: "screening",
+      label: "Screening Q2: Technical Experience",
+      description: "Technical experience answer must be specific and include concrete examples (≥30 words)",
+      status: s2Words >= 40 ? "pass" : s2Words >= 20 ? "warn" : "fail",
+      detail: s2Words > 0 ? `${s2Words} words` : "Empty — must be completed before proceeding",
+      isBlocker: false,
+      fixHint: s2Words < 30 ? "Mention specific technologies, tools, and outcomes with numbers/metrics" : undefined,
+    });
+
+    const s3Words = input.screeningA3.trim().split(/\s+/).filter(Boolean).length;
+    checks.push({
+      id: "screening_q3",
+      category: "screening",
+      label: "Screening Q3: Complex Project / Achievement",
+      description: "Technical achievement answer must demonstrate scope and impact (≥30 words)",
+      status: s3Words >= 40 ? "pass" : s3Words >= 20 ? "warn" : "fail",
+      detail: s3Words > 0 ? `${s3Words} words` : "Empty — must be completed before proceeding",
+      isBlocker: false,
+      fixHint: s3Words < 30 ? "Describe a specific project: what problem it solved, your role, and measurable results" : undefined,
+    });
+  }
+
+  // ─── 5. CHANNEL ENFORCEMENT CHECKS ─────────────────────────────────────────
+
+  if (channelConflict) {
+    checks.push({
+      id: "channel_conflict",
+      category: "channel",
+      label: "Application Channel Conflict — Portal Required",
+      description: "This job is explicitly set to portal/website application. Email dispatch is blocked.",
+      status: "fail",
+      detail: channelConflictReason,
+      isBlocker: true,
+      fixHint: "Switch the application method back to 'Apply via Company Website / Portal'",
+    });
+  } else if (hasPortalUrl && !hasRecruiterEmail && input.applyMethod === "email") {
+    checks.push({
+      id: "channel_no_email",
+      category: "channel",
+      label: "No Recruiter Email — Portal Application Recommended",
+      description: "This job has no confirmed recruiter email. Applications sent to unknown addresses are likely lost.",
+      status: "warn",
+      detail: "No recruiter/contact email on this job record. The portal URL is the verified application method.",
+      isBlocker: false,
+      fixHint: "Switch to 'Apply via Company Website' and use the portal URL to submit directly",
+    });
+  } else {
+    checks.push({
+      id: "channel_ok",
+      category: "channel",
+      label: "Application Channel",
+      description: "Application channel confirmed",
+      status: "pass",
+      detail: input.applyMethod === "website"
+        ? `Portal application via ${getPortalPlatformInfo(input.job.source_url || "")?.name || "career portal"}`
+        : `Email dispatch to ${input.job.recruiter_email || input.job.contact_email || "recruiter"}`,
+      isBlocker: false,
+    });
+  }
+
+  // ─── 6. PORTAL-SPECIFIC DOCUMENT CHECKS ────────────────────────────────────
+
+  if (isPortalApp && portalInfo) {
+    // Kenya-specific: ID and KRA PIN required
+    if (portalInfo.region === "kenya" || portalInfo.region === "africa") {
+      checks.push({
+        id: "id_number",
+        category: "documents",
+        label: "National ID / Passport Number",
+        description: "Kenyan portals frequently require National ID or Passport Number for identity verification",
+        status: (input.idNumber || "").replace(/\s/g, "").length >= 6 ? "pass" : "warn",
+        detail: input.idNumber ? `ID: ${input.idNumber}` : "Not provided",
+        isBlocker: false,
+        fixHint: "Enter your National ID number in the Personal & Socials tab",
+      });
+
+      checks.push({
+        id: "kra_pin",
+        category: "documents",
+        label: "KRA PIN (Tax Compliance Certificate)",
+        description: "Kenyan government, regulated sector and major corporate portals require KRA PIN for compliance",
+        status: (input.kraPin || "").replace(/\s/g, "").length >= 8 ? "pass" : "warn",
+        detail: input.kraPin ? `KRA PIN: ${input.kraPin}` : "Not provided",
+        isBlocker: false,
+        fixHint: "Enter your KRA PIN in the Personal & Socials tab (format: A0XXXXXXXXK)",
+      });
+    }
+
+    // Salary expectation check
+    checks.push({
+      id: "salary_expectation",
+      category: "documents",
+      label: "Salary Expectation / Benchmark",
+      description: "Most portals require salary expectation. A blank field may cause portal validation errors.",
+      status: (input.salaryExpectation || "").trim().length >= 3 ? "pass" : "warn",
+      detail: input.salaryExpectation || "Not specified",
+      isBlocker: false,
+      fixHint: "Enter your salary expectation in the Eligibility tab (e.g. KES 80,000 - 120,000)",
+    });
+
+    // Notice period check
+    checks.push({
+      id: "notice_period",
+      category: "documents",
+      label: "Notice Period / Availability",
+      description: "Portal forms require notice period for scheduling purposes",
+      status: (input.noticePeriod || "").trim().length >= 3 ? "pass" : "warn",
+      detail: input.noticePeriod || "Not specified",
+      isBlocker: false,
+      fixHint: "Set your notice period in the Eligibility tab (e.g. 'Immediate / 2 Weeks')",
+    });
+  }
+
+  // ─── 7. PROFILE COMPLETENESS CHECKS ────────────────────────────────────────
+
+  // Compute metrics
+  const passCount = checks.filter(c => c.status === "pass").length;
+  const warnCount = checks.filter(c => c.status === "warn").length;
+  const failCount = checks.filter(c => c.status === "fail").length;
+  const blockerFailCount = checks.filter(c => c.status === "fail" && c.isBlocker).length;
+
+  // Weighted score: pass=100pts, warn=50pts, fail=0pts per check
+  const totalChecks = checks.length;
+  const rawScore = totalChecks > 0
+    ? Math.round(((passCount * 100 + warnCount * 50) / (totalChecks * 100)) * 100)
+    : 0;
+  const readinessScore = Math.min(rawScore, 100);
+
+  return {
+    checks,
+    passCount,
+    warnCount,
+    failCount,
+    blockerFailCount,
+    readinessScore,
+    isReadyToProceed: blockerFailCount === 0,
+    isPortalApplication: isPortalApp,
+    channelConflict,
+    channelConflictReason,
+  };
+}
+
+/**
+ * Returns a color class based on readiness score for UI display.
+ */
+export function getReadinessColor(score: number): string {
+  if (score >= 85) return "emerald";
+  if (score >= 65) return "amber";
+  return "rose";
+}
+
+/**
+ * Returns a readiness label based on score.
+ */
+export function getReadinessLabel(score: number, blockerFails: number): string {
+  if (blockerFails > 0) return "Not Ready — Blockers Must Be Fixed";
+  if (score >= 85) return "Ready to Submit";
+  if (score >= 65) return "Review Warnings Before Proceeding";
+  return "Incomplete — Address Issues";
+}
+

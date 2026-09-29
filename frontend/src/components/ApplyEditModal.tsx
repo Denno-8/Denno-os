@@ -102,6 +102,17 @@ export default function ApplyEditModal({ isOpen, onClose, job, onSuccessApply }:
   const portalPlatformName = _extractPortalPlatformFromUrl(job.source_url || "");
   const applicationDeadline = extractApplicationDeadline(job.description || "", "");
 
+  // Strict channel enforcement: is this job portal-only?
+  const isPortalOnlyJob =
+    job.apply_method === "website" ||
+    job.apply_method === "portal" ||
+    (hasLiveLink && !form.recruiter_email && !job.contact_email && !job.recruiter_email);
+  const emailBlockedReason = isPortalOnlyJob
+    ? job.apply_method === "website" || job.apply_method === "portal"
+      ? `This job is flagged as portal/website-only (apply_method="${job.apply_method}"). Email dispatch is not permitted.`
+      : "This job has a portal URL but no recruiter email address on record. Email dispatch cannot be verified — use the portal instead."
+    : null;
+
   const generateCoverLetter = () => {
     const rawSkills = form.required_skills ? form.required_skills.split(",") : job.required_skills;
     const cleanSkills = formatCleanSkillsString(
@@ -238,6 +249,16 @@ ${candidateEmail}.`;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    // Hard block: portal-only job cannot use email dispatch
+    if (isPortalOnlyJob && applyMethod === "email") {
+      setSubmitError(
+        emailBlockedReason ||
+        "This job requires portal/website application. Please switch to 'Apply via Company Website' and use the portal URL."
+      );
+      return;
+    }
+
     const skillsList = form.required_skills
       .split(",")
       .map((s) => s.trim())
@@ -578,6 +599,18 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
             <label className="block text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
               Application Method / Channel *
             </label>
+
+            {/* Portal-only enforcement banner */}
+            {isPortalOnlyJob && (
+              <div className="flex items-start gap-2.5 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700 rounded-xl">
+                <AlertTriangle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                <div className="text-[11px]">
+                  <div className="font-extrabold text-rose-700 dark:text-rose-300">Portal Application Required — Email Dispatch Locked</div>
+                  <div className="text-rose-600 dark:text-rose-400 mt-0.5">{emailBlockedReason}</div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
@@ -591,6 +624,11 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
                 <div className="flex items-center gap-2 text-xs">
                   <ExternalLink size={14} className={applyMethod === "website" ? "text-white" : "text-blue-500"} />
                   <span>Apply via Company Website</span>
+                  {isPortalOnlyJob && (
+                    <span className="ml-auto px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10px] font-black rounded">
+                      REQUIRED
+                    </span>
+                  )}
                 </div>
                 <div className={`text-[10px] mt-1 ${applyMethod === "website" ? "opacity-90" : "text-slate-400"}`}>
                   Track application submitted on employer career website/portal.
@@ -599,19 +637,31 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
 
               <button
                 type="button"
-                onClick={() => setApplyMethod("email")}
+                onClick={() => {
+                  if (isPortalOnlyJob) return; // strictly blocked
+                  setApplyMethod("email");
+                }}
+                disabled={isPortalOnlyJob}
+                title={isPortalOnlyJob ? emailBlockedReason || "Email dispatch not available" : "Dispatch via Recruiter Email"}
                 className={`p-3 rounded-xl border text-left transition-all ${
-                  applyMethod === "email"
+                  isPortalOnlyJob
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed"
+                    : applyMethod === "email"
                     ? "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-500/20 font-bold"
                     : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-rose-400"
                 }`}
               >
                 <div className="flex items-center gap-2 text-xs">
-                  <Mail size={14} className={applyMethod === "email" ? "text-white" : "text-rose-500"} />
+                  <Mail size={14} className={isPortalOnlyJob ? "text-slate-400" : applyMethod === "email" ? "text-white" : "text-rose-500"} />
                   <span>Dispatch via Recruiter Email</span>
+                  {isPortalOnlyJob && (
+                    <span className="ml-auto px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-black rounded">
+                      BLOCKED
+                    </span>
+                  )}
                 </div>
-                <div className={`text-[10px] mt-1 ${applyMethod === "email" ? "opacity-90" : "text-slate-400"}`}>
-                  Dispatches HTML email with PDF Resume & Cover Letter attachments.
+                <div className={`text-[10px] mt-1 ${applyMethod === "email" && !isPortalOnlyJob ? "opacity-90" : "text-slate-400"}`}>
+                  {isPortalOnlyJob ? "Not available — this job requires portal application." : "Dispatches HTML email with PDF Resume & Cover Letter attachments."}
                 </div>
               </button>
             </div>
