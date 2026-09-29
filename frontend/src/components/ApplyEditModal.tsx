@@ -11,7 +11,7 @@ import { useCreateApplication } from "../hooks/useApplications";
 import { useCVVersions, useCreateCV, useGenerateCVForJob, useUpdateCV, useDeleteCV } from "../hooks/useCV";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { cvService } from "../services/cv.service";
-import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements } from "../utils/jobScrutiny";
+import { analyzeJobApplicationChannel, extractResponsibilitiesAndRequirements, getPortalPlatformInfo, _extractPortalPlatformFromUrl, extractApplicationDeadline } from "../utils/jobScrutiny";
 import { formatCleanSkillsString, sanitizeSkillList } from "../utils/skillSanitizer";
 import CVStyledPreview from "./CVStyledPreview";
 import InAppWebPortalApplyStudio from "./InAppWebPortalApplyStudio";
@@ -98,6 +98,9 @@ export default function ApplyEditModal({ isOpen, onClose, job, onSuccessApply }:
   const selectedCV = cvVersions.find((cv) => cv.id === form.cv_version_id);
   const channelInfo = analyzeJobApplicationChannel(job);
   const scrutinyData = extractResponsibilitiesAndRequirements(job.description, job.requirements, job.required_skills);
+  const portalPlatformInfo = getPortalPlatformInfo(job.source_url || "");
+  const portalPlatformName = _extractPortalPlatformFromUrl(job.source_url || "");
+  const applicationDeadline = extractApplicationDeadline(job.description || "", "");
 
   const generateCoverLetter = () => {
     const rawSkills = form.required_skills ? form.required_skills.split(",") : job.required_skills;
@@ -465,25 +468,63 @@ ${coverLetter.trim() || `Dear Hiring Team at ${form.company_name},\n\nI am writi
             )}
 
             {/* ── AI Channel Detection Badge ── */}
-            <div className="mx-5 mt-3 p-3 bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between text-xs gap-2">
-              <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-600 text-white rounded-lg font-bold shrink-0 flex items-center justify-center">
-                    {channelInfo.channel === "email" ? <Mail size={13} /> : <Globe size={13} />}
-                  </div>
-                <div>
-                  <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <span>AI Channel Detection: {channelInfo.channel === "email" ? "Direct Recruiter Email Application" : "Official Web Portal Application"}</span>
-                  </div>
-                  <div className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
-                    {channelInfo.reason}
+            <div className="mx-5 mt-3 p-3 bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl text-xs gap-2 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-600 text-white rounded-lg font-bold shrink-0 flex items-center justify-center">
+                      {channelInfo.channel === "email" ? <Mail size={13} /> : <Globe size={13} />}
+                    </div>
+                  <div>
+                    <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>AI Channel Detection: {channelInfo.channel === "email" ? "Direct Recruiter Email Application" : "Official Web Portal Application"}</span>
+                    </div>
+                    <div className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+                      {channelInfo.reason}
+                    </div>
                   </div>
                 </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                  channelInfo.channel === "email" ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                }`}>
+                  {channelInfo.channel}
+                </span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
-                channelInfo.channel === "email" ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-              }`}>
-                {channelInfo.channel}
-              </span>
+
+              {/* Portal Platform Details (shown for website channel) */}
+              {channelInfo.channel === "website" && (portalPlatformName || portalPlatformInfo) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-blue-200 dark:border-blue-800">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Portal:</span>
+                  <span className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                    {portalPlatformName || portalPlatformInfo?.name}
+                  </span>
+                  {portalPlatformInfo?.atsSystem && (
+                    <span className="px-2 py-0.5 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 rounded-lg text-[10px] font-bold text-violet-700 dark:text-violet-300">
+                      ATS: {portalPlatformInfo.atsSystem}
+                    </span>
+                  )}
+                  {portalPlatformInfo?.region && (
+                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                      portalPlatformInfo.region === "kenya" ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" :
+                      "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                    }`}>
+                      {portalPlatformInfo.region}
+                    </span>
+                  )}
+                  {portalPlatformInfo?.avgResponseDays && (
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      ~{portalPlatformInfo.avgResponseDays}d avg response
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Deadline warning */}
+              {applicationDeadline && (
+                <div className="flex items-center gap-2 p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-[11px] text-rose-700 dark:text-rose-300 font-bold">
+                  <AlertTriangle size={12} className="text-rose-500 shrink-0" />
+                  Application Deadline Detected: {applicationDeadline}
+                </div>
+              )}
             </div>
 
             {/* ── Job Responsibilities & Requirements Scrutiny Panel ── */}

@@ -3,7 +3,8 @@ import {
   X, CheckCircle2, AlertCircle, FileText, ExternalLink, Sparkles, Send,
   User, Mail, Phone, MapPin, DollarSign, Clock, ShieldCheck, Wand2, RefreshCw,
   Eye, Edit3, ArrowRight, Check, Download, Save, RotateCcw, Copy, Zap, Inbox, Globe,
-  Building2, Briefcase,
+  Building2, Briefcase, ListChecks, Info, BookOpen, ChevronDown, ChevronUp,
+  Target, Cpu, FileCheck, AlertTriangle, Layers,
 } from "lucide-react";
 import type { Job } from "../types/job.types";
 import { useCreateApplication } from "../hooks/useApplications";
@@ -13,7 +14,15 @@ import { cvService } from "../services/cv.service";
 import CVStyledPreview from "./CVStyledPreview";
 import StructuredCVEditor from "./StructuredCVEditor";
 import JobPortalPreviewCard from "./JobPortalPreviewCard";
-import { extractResponsibilitiesAndRequirements } from "../utils/jobScrutiny";
+import {
+  extractResponsibilitiesAndRequirements,
+  getPortalPlatformInfo,
+  getPortalChecklist,
+  getPortalRequiredDocuments,
+  getPortalTips,
+  _extractPortalPlatformFromUrl,
+  extractApplicationDeadline,
+} from "../utils/jobScrutiny";
 import { formatCleanSkillsString } from "../utils/skillSanitizer";
 import { API_URL, getAccessToken } from "../services/api";
 
@@ -38,6 +47,11 @@ export default function InAppWebPortalApplyStudio({
 
   // ── Active step ──────────────────────────────────────────────────────────
   const [activeStep, setActiveStep] = useState<"form" | "portal" | "review" | "success">("form");
+
+  // ── Portal platform awareness ────────────────────────────────────────────
+  const [portalChecklistChecked, setPortalChecklistChecked] = useState<boolean[]>([]);
+  const [showPortalTips, setShowPortalTips] = useState(false);
+  const [showAtsProcedures, setShowAtsProcedures] = useState(true);
 
   // ── Derived user defaults (real profile data) ─────────────────────────
   const userFullName =
@@ -1104,13 +1118,64 @@ ${coverLetter}`;
                   </div>
                 </div>
 
-                {/* Right: Job Portal Preview + Scrutiny */}
+                {/* Right: Job Portal Preview + Scrutiny + Portal Intelligence */}
                 <div className="lg:col-span-5 space-y-4">
-                  {/* Live Portal Preview */}
+                  {/* Portal Platform Identity Card */}
+                  {(() => {
+                    const portalUrl = job.source_url || "";
+                    const platformInfo = getPortalPlatformInfo(portalUrl);
+                    const platformName = _extractPortalPlatformFromUrl(portalUrl);
+                    const deadline = extractApplicationDeadline(job.description || "", "");
+                    if (!platformName && !platformInfo) return null;
+                    return (
+                      <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                              <Layers size={14} />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-slate-900 dark:text-white text-xs">{platformName || platformInfo?.name}</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">{platformInfo?.atsSystem || "Custom Portal"}</div>
+                            </div>
+                          </div>
+                          {platformInfo?.region && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              platformInfo.region === "kenya" ? "bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300" :
+                              platformInfo.region === "africa" ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300" :
+                              "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                            }`}>
+                              {platformInfo.region}
+                            </span>
+                          )}
+                        </div>
+                        {platformInfo?.atsNotes && (
+                          <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl text-[11px] text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                            <Cpu size={12} className="shrink-0 mt-0.5 text-blue-500" />
+                            <span>{platformInfo.atsNotes}</span>
+                          </div>
+                        )}
+                        {deadline && (
+                          <div className="flex items-center gap-2 p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-[11px] text-rose-700 dark:text-rose-300 font-bold">
+                            <AlertTriangle size={12} className="text-rose-500 shrink-0" />
+                            Deadline: {deadline}
+                          </div>
+                        )}
+                        {platformInfo?.avgResponseDays && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            <Clock size={11} className="text-amber-500" />
+                            <span>Typical response: <strong className="text-slate-700 dark:text-slate-300">{platformInfo.avgResponseDays} business days</strong></span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Live Portal Workspace */}
                   <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-3 shadow-lg">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <div className="font-extrabold text-xs flex items-center gap-2">
-                        <Globe size={13} className="text-blue-400" /> <span>Live Employer Portal Workspace</span>
+                        <Globe size={13} className="text-blue-400" /> <span>Portal Auto-Fill Tools</span>
                       </div>
                       {job.source_url && (
                         <a
@@ -1234,17 +1299,212 @@ ${coverLetter}`;
             )}
 
             {/* ════════════════════════════════════════════════════════════════
-                Step 2 — Live Portal View
+                Step 2 — Live Portal View + Portal Awareness Intelligence
                 ════════════════════════════════════════════════════════════════ */}
-            {activeStep === "portal" && (
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-2xl text-xs font-semibold text-blue-800 dark:text-blue-200 flex items-start gap-2">
-                  <Copy size={14} className="shrink-0 mt-0.5 text-blue-500" />
-                  Your candidate details have been copied to clipboard. Open the portal and paste them into the relevant fields.
+            {activeStep === "portal" && (() => {
+              const portalUrl = job.source_url || "";
+              const platformInfo = getPortalPlatformInfo(portalUrl);
+              const platformName = _extractPortalPlatformFromUrl(portalUrl) || platformInfo?.name || "Web Portal";
+              const checklist = getPortalChecklist(portalUrl);
+              const requiredDocs = getPortalRequiredDocuments(portalUrl);
+              const tips = getPortalTips(portalUrl);
+              const deadline = extractApplicationDeadline(job.description || "", "");
+
+              // Initialize checkbox state if needed
+              if (portalChecklistChecked.length !== checklist.length) {
+                // Don't setState here — just render with defaults
+              }
+              const checked = portalChecklistChecked.length === checklist.length
+                ? portalChecklistChecked
+                : new Array(checklist.length).fill(false);
+
+              return (
+                <div className="space-y-4">
+                  {/* ── Payload copied banner ───────────────────────────── */}
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-2xl text-xs font-semibold text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                    <Copy size={13} className="shrink-0 mt-0.5 text-blue-500" />
+                    <span>Your candidate details have been copied to clipboard. Open the portal below and paste them into the relevant fields as you go.</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* LEFT COLUMN: Portal awareness intelligence */}
+                    <div className="lg:col-span-5 space-y-3">
+
+                      {/* Portal Platform Identity Card */}
+                      <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-700 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                              <Globe size={16} />
+                            </div>
+                            <div>
+                              <div className="font-extrabold text-white text-xs">{platformName}</div>
+                              <div className="text-[10px] text-slate-400 font-medium">
+                                {platformInfo?.atsSystem || "Custom / Unknown ATS"}
+                              </div>
+                            </div>
+                          </div>
+                          {platformInfo?.region && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              platformInfo.region === "kenya" ? "bg-emerald-600/30 text-emerald-300 border border-emerald-500/30" :
+                              platformInfo.region === "africa" ? "bg-amber-600/30 text-amber-300 border border-amber-500/30" :
+                              "bg-blue-600/30 text-blue-300 border border-blue-500/30"
+                            }`}>
+                              {platformInfo.region}
+                            </span>
+                          )}
+                        </div>
+
+                        {platformInfo?.atsNotes && (
+                          <div className="p-2.5 bg-slate-800 rounded-xl border border-slate-700 text-[11px] text-slate-300 flex items-start gap-2">
+                            <Cpu size={13} className="shrink-0 mt-0.5 text-blue-400" />
+                            <span>{platformInfo.atsNotes}</span>
+                          </div>
+                        )}
+
+                        {platformInfo?.avgResponseDays && (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                            <Clock size={12} className="text-amber-400" />
+                            <span>Avg. response time: <strong className="text-amber-300">{platformInfo.avgResponseDays} business days</strong></span>
+                          </div>
+                        )}
+
+                        {deadline && (
+                          <div className="flex items-center gap-2 p-2 bg-rose-900/40 border border-rose-500/30 rounded-lg text-[11px] text-rose-300 font-bold">
+                            <AlertTriangle size={12} className="text-rose-400 shrink-0" />
+                            Application Deadline: {deadline}
+                          </div>
+                        )}
+
+                        {portalUrl && (
+                          <a
+                            href={portalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl transition-all"
+                          >
+                            <ExternalLink size={13} />
+                            Open {platformName} Portal in Browser
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Required Documents Checklist */}
+                      <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                        <div className="flex items-center gap-2 font-extrabold text-slate-900 dark:text-white text-[11px] uppercase tracking-wider">
+                          <FileCheck size={14} className="text-violet-500" />
+                          Required Documents
+                        </div>
+                        <ul className="space-y-1.5">
+                          {requiredDocs.map((doc, i) => (
+                            <li key={i} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                              <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                              {doc}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Portal Optimization Tips */}
+                      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowPortalTips(v => !v)}
+                          className="w-full flex items-center justify-between px-3.5 py-2.5 text-[11px] font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Sparkles size={13} className="text-amber-500" />
+                            Portal Optimization Tips
+                          </span>
+                          {showPortalTips ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </button>
+                        {showPortalTips && (
+                          <ul className="space-y-1.5 px-3.5 pb-3">
+                            {tips.map((tip, i) => (
+                              <li key={i} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                <span className="text-amber-500 font-black shrink-0 mt-0.5">→</span>
+                                {tip}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: Step-by-step submission procedures + portal preview */}
+                    <div className="lg:col-span-7 space-y-3">
+
+                      {/* ATS Submission Procedure */}
+                      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowAtsProcedures(v => !v)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all"
+                        >
+                          <span className="flex items-center gap-2">
+                            <ListChecks size={14} className="text-blue-500" />
+                            Step-by-Step Portal Submission Procedure
+                          </span>
+                          {showAtsProcedures ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </button>
+                        {showAtsProcedures && (
+                          <div className="px-4 pb-4 space-y-1.5">
+                            {checklist.map((item, i) => (
+                              <label
+                                key={i}
+                                className="flex items-start gap-2.5 cursor-pointer group"
+                              >
+                                <div
+                                  className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+                                    checked[i]
+                                      ? "bg-emerald-500 border-emerald-500"
+                                      : "border-slate-300 dark:border-slate-600 group-hover:border-blue-400"
+                                  }`}
+                                  onClick={() => {
+                                    const next = [...(portalChecklistChecked.length === checklist.length
+                                      ? portalChecklistChecked
+                                      : new Array(checklist.length).fill(false))];
+                                    next[i] = !next[i];
+                                    setPortalChecklistChecked(next);
+                                  }}
+                                >
+                                  {checked[i] && <Check size={10} className="text-white" />}
+                                </div>
+                                <span className={`text-xs leading-relaxed ${
+                                  checked[i]
+                                    ? "line-through text-slate-400 dark:text-slate-600"
+                                    : "text-slate-700 dark:text-slate-300"
+                                }`}>
+                                  {item}
+                                </span>
+                              </label>
+                            ))}
+                            {/* Progress */}
+                            <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                                <span>Submission progress</span>
+                                <span className="font-bold text-slate-700 dark:text-slate-300">
+                                  {checked.filter(Boolean).length} / {checklist.length} steps
+                                </span>
+                              </div>
+                              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-emerald-500 rounded-full transition-all"
+                                  style={{ width: `${(checked.filter(Boolean).length / checklist.length) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Live Portal Preview card */}
+                      <JobPortalPreviewCard job={job} height={380} showChrome />
+                    </div>
+                  </div>
                 </div>
-                <JobPortalPreviewCard job={job} height={480} showChrome />
-              </div>
-            )}
+              );
+            })()}
 
             {/* ════════════════════════════════════════════════════════════════
                 Step 3 — Review & Confirm
