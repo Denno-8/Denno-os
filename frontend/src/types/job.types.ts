@@ -18,8 +18,19 @@ export interface Job {
   is_expired: boolean;
   source_url: string;
   contact_email: string;
+  /** Direct recruiter or HR email (if available) */
+  recruiter_email?: string | null;
   is_hot: boolean;
   description: string;
+  /** Internal notes or additional job context */
+  notes?: string | null;
+  /**
+   * How this job should be applied to.
+   * 'website' | 'portal' = must use the portal URL; email dispatch is blocked.
+   * 'email' = direct email dispatch is permitted.
+   * null / undefined = auto-detect from source_url and contact_email signals.
+   */
+  apply_method?: "website" | "portal" | "email" | null;
 }
 
 export interface SalaryBenchmark {

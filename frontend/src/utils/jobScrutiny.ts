@@ -821,7 +821,13 @@ export interface PortalScreeningQuestion {
 
 /**
  * Returns the standard set of portal form fields, pre-filled from the candidate profile,
- * customized per portal platform.
+ * customized per portal platform AND job-specific requirements.
+ *
+ * Field `required` is determined by:
+ *  1. Platform rules (e.g. LinkedIn always needs LinkedIn URL)
+ *  2. Job description signals (e.g. mentions 'linkedin' → LinkedIn field required)
+ *  3. Region rules (e.g. Kenya portals need National ID, KRA PIN)
+ *  4. Everything else is optional and clearly labelled
  */
 export function getPortalFormFields(
   portalUrl: string,
@@ -846,11 +852,39 @@ export function getPortalFormFields(
     eeoGender: string;
     eeoDisability: string;
     eeoVeteran: string;
+  },
+  job?: {
+    title?: string;
+    description?: string | null;
+    requirements?: string[] | null;
+    required_skills?: string[] | null;
+    mode?: string;
+    employment_type?: string;
+    level?: string;
   }
 ): PortalFormField[] {
   const platform = _detectPortalKey(portalUrl);
   const platformInfo = PORTAL_DATABASE[platform];
   const isKenyanPortal = platformInfo?.region === "kenya" || platformInfo?.region === "africa";
+
+  // Derive job-specific field requirements from description + requirements
+  const desc = ((job?.description || "") + " " + (job?.requirements || []).join(" ")).toLowerCase();
+  const skills = (job?.required_skills || []).map(s => s.toLowerCase());
+
+  // Field requirement heuristics derived from job context
+  const jobRequiresLinkedIn   = platform === "linkedin.com" || desc.includes("linkedin");
+  const jobRequiresGithub     = desc.includes("github") || desc.includes("portfolio") || skills.some(s => ["react","node","python","javascript","typescript","go","rust"].includes(s));
+  const jobRequiresSalary     = desc.includes("salary expectation") || desc.includes("compensation") || desc.includes("remuneration");
+  const jobRequiresNoticePeriod = desc.includes("notice period") || desc.includes("start date") || desc.includes("available");
+  const jobRequiresCoverLetter  = platform === "greenhouse.io" || platform === "lever.co" || platform === "workday.com" || desc.includes("cover letter");
+  const jobRequiresNationalId   = isKenyanPortal && (desc.includes("national id") || desc.includes("id number") || desc.includes("passport"));
+  const jobRequiresKraPin       = isKenyanPortal && (desc.includes("kra") || desc.includes("tax compliance") || desc.includes("pin number"));
+  const jobRequiresWorkAuth     = desc.includes("work permit") || desc.includes("work authorization") || desc.includes("right to work") || desc.includes("citizen");
+  const jobRequiresRelocation   = job?.mode === "Onsite" || desc.includes("relocation") || desc.includes("willing to relocate");
+  const jobRequiresVisa         = desc.includes("visa") || desc.includes("sponsorship");
+  const jobIsRemoteOrHybrid     = job?.mode === "Remote" || job?.mode === "Hybrid";
+  const jobIsSenior             = (job?.level || "").toLowerCase().includes("senior") || (job?.level || "").toLowerCase().includes("lead") || (job?.level || "").toLowerCase().includes("manager");
+
 
   const fields: PortalFormField[] = [
     // ── PERSONAL DETAILS ───────────────────────────────────────────────────────
@@ -898,20 +932,24 @@ export function getPortalFormFields(
       label: "LinkedIn Profile URL",
       type: "url",
       section: "personal",
-      required: platform === "linkedin.com",
+      required: jobRequiresLinkedIn,
       placeholder: "https://linkedin.com/in/username",
       defaultValue: candidate.linkedinUrl,
-      helpText: "Strongly recommended — many ATS systems verify your LinkedIn profile",
+      helpText: jobRequiresLinkedIn
+        ? "Required by this job posting. Ensure your profile is up to date."
+        : "Strongly recommended — many ATS systems verify your LinkedIn profile",
     },
     {
       id: "github_url",
       label: "GitHub / Portfolio URL",
       type: "url",
       section: "personal",
-      required: false,
+      required: jobRequiresGithub,
       placeholder: "https://github.com/username",
       defaultValue: candidate.githubUrl,
-      helpText: "Include if relevant to the role (especially for tech positions)",
+      helpText: jobRequiresGithub
+        ? "Required for this role — include your best repositories or portfolio."
+        : "Optional — include if relevant to the role (especially for tech positions)",
     },
 
     // ── EDUCATION ──────────────────────────────────────────────────────────────
@@ -1003,7 +1041,7 @@ export function getPortalFormFields(
       label: "Work Authorization Status",
       type: "select",
       section: "eligibility",
-      required: true,
+      required: jobRequiresWorkAuth,
       options: [
         "Authorized / Citizen",
         "Permanent Resident",
@@ -1012,22 +1050,28 @@ export function getPortalFormFields(
         "Student Visa / OPT",
       ],
       defaultValue: candidate.workAuthorization,
+      helpText: jobRequiresWorkAuth
+        ? "This job explicitly requires work authorization confirmation"
+        : "Optional — most portals ask this to filter ineligible candidates",
     },
     {
       id: "requires_visa_sponsorship",
       label: "Do you require visa sponsorship?",
       type: "yesno",
       section: "eligibility",
-      required: true,
+      required: jobRequiresVisa,
       options: ["Yes", "No"],
       defaultValue: candidate.visaSponsorship.toLowerCase().startsWith("no") ? "No" : "Yes",
+      helpText: jobRequiresVisa
+        ? "This job mentions visa/sponsorship requirements — answer accurately"
+        : "Optional disclosure",
     },
     {
       id: "relocation",
       label: "Open to Relocation?",
       type: "select",
       section: "eligibility",
-      required: false,
+      required: jobRequiresRelocation,
       options: [
         "Yes – willing to relocate",
         "No – local candidates only",
@@ -1037,13 +1081,16 @@ export function getPortalFormFields(
       defaultValue: candidate.relocationPreference.includes("Open") ? "Open to Hybrid / Remote"
         : candidate.relocationPreference.includes("relocat") ? "Yes – willing to relocate"
         : "Negotiable",
+      helpText: jobRequiresRelocation
+        ? "This is an on-site role that may require relocation"
+        : "Optional — only relevant for on-site roles",
     },
     {
       id: "notice_period",
       label: "Notice Period / Availability to Start",
       type: "select",
       section: "eligibility",
-      required: true,
+      required: jobRequiresNoticePeriod,
       options: [
         "Immediately available",
         "1 week",
@@ -1057,6 +1104,7 @@ export function getPortalFormFields(
         : candidate.noticePeriod.includes("2") ? "2 weeks"
         : candidate.noticePeriod.includes("1") ? "1 month"
         : "Immediately available",
+      helpText: "Most portals require this. Ensure accuracy — misrepresentation can result in withdrawal of offer.",
     },
 
     // ── SALARY ─────────────────────────────────────────────────────────────────
@@ -1065,11 +1113,15 @@ export function getPortalFormFields(
       label: "Salary Expectation",
       type: "text",
       section: "salary",
-      required: false,
+      required: jobRequiresSalary,
       placeholder: "e.g. KES 80,000 – 120,000 per month",
       defaultValue: candidate.salaryExpectation,
-      helpText: "Be specific with currency and period. Leaving blank may disadvantage your application.",
-      validationNote: "Most portals require a numeric range or specific figure",
+      helpText: jobRequiresSalary
+        ? "This portal requires a salary figure. Quote a range aligned to the advertised band."
+        : "Optional — but leaving blank may disadvantage your application. Be specific with currency and period.",
+      validationNote: jobRequiresSalary
+        ? "Required by this portal — provide a numeric range"
+        : undefined,
     },
 
     // ── DOCUMENTS ──────────────────────────────────────────────────────────────
@@ -1087,8 +1139,10 @@ export function getPortalFormFields(
       label: "Cover Letter",
       type: "file",
       section: "documents",
-      required: platform === "greenhouse.io" || platform === "lever.co" || platform === "workday.com",
-      helpText: "Upload as PDF or paste directly into the portal's cover letter text field",
+      required: jobRequiresCoverLetter,
+      helpText: jobRequiresCoverLetter
+        ? "Required by this portal — upload PDF or paste into the portal's text field"
+        : "Optional — upload as PDF or paste into the portal's cover letter text field if provided",
     },
 
     // ── KENYA-SPECIFIC ──────────────────────────────────────────────────────────
@@ -1098,21 +1152,26 @@ export function getPortalFormFields(
         label: "National ID / Passport Number",
         type: "text" as PortalFieldType,
         section: "documents" as PortalFormField["section"],
-        required: true,
+        required: jobRequiresNationalId,
         placeholder: "e.g. 38491024",
         defaultValue: candidate.idNumber,
-        validationNote: "Required for Kenyan employment law compliance and background checks",
+        validationNote: jobRequiresNationalId
+          ? "Required by this portal for identity verification"
+          : "May be required — check the portal form before submitting",
+        helpText: "National ID or Passport Number for Kenyan employment compliance",
       },
       {
         id: "kra_pin",
         label: "KRA PIN (Tax Compliance)",
         type: "text" as PortalFieldType,
         section: "documents" as PortalFormField["section"],
-        required: isKenyanPortal,
+        required: jobRequiresKraPin,
         placeholder: "e.g. A019283471K",
         defaultValue: candidate.kraPin,
-        helpText: "Kenya Revenue Authority Personal Identification Number",
-        validationNote: "Required by government, regulated sector, and major corporate employers in Kenya",
+        helpText: "Kenya Revenue Authority PIN — required by government, regulated sector, and major corporate portals",
+        validationNote: jobRequiresKraPin
+          ? "Required by this portal based on job description signals"
+          : "May be required — check the portal form",
       },
     ] : []),
 
@@ -1644,16 +1703,27 @@ export function analyzeApplicationReadiness(input: ReadinessInput): ReadinessRep
   // ─── 6. PORTAL-SPECIFIC DOCUMENT CHECKS ────────────────────────────────────
 
   if (isPortalApp && portalInfo) {
-    // Kenya-specific: ID and KRA PIN required
+    const jobDesc = (input.job.description || "").toLowerCase();
+    const jobReqs = (input.job.requirements || []).join(" ").toLowerCase();
+    const jobText = jobDesc + " " + jobReqs;
+
+    const jobRequiresSalary     = jobText.includes("salary expectation") || jobText.includes("compensation") || jobText.includes("remuneration");
+    const jobRequiresNotice     = jobText.includes("notice period") || jobText.includes("start date") || jobText.includes("available immediately");
+    const jobRequiresNationalId = (portalInfo.region === "kenya" || portalInfo.region === "africa") &&
+      (jobText.includes("national id") || jobText.includes("id number") || jobText.includes("passport number"));
+    const jobRequiresKraPin     = (portalInfo.region === "kenya" || portalInfo.region === "africa") &&
+      (jobText.includes("kra") || jobText.includes("tax compliance") || jobText.includes("pin number"));
+
+    // Kenya-specific: National ID — warn always, blocker only if job explicitly requires it
     if (portalInfo.region === "kenya" || portalInfo.region === "africa") {
       checks.push({
         id: "id_number",
         category: "documents",
         label: "National ID / Passport Number",
-        description: "Kenyan portals frequently require National ID or Passport Number for identity verification",
-        status: (input.idNumber || "").replace(/\s/g, "").length >= 6 ? "pass" : "warn",
-        detail: input.idNumber ? `ID: ${input.idNumber}` : "Not provided",
-        isBlocker: false,
+        description: "Kenyan portals frequently require National ID or Passport for identity verification",
+        status: (input.idNumber || "").replace(/\s/g, "").length >= 6 ? "pass" : (jobRequiresNationalId ? "fail" : "warn"),
+        detail: input.idNumber ? `ID: ${input.idNumber}` : `Not provided${jobRequiresNationalId ? " — required by this job" : " (check portal form)"}`,
+        isBlocker: jobRequiresNationalId,
         fixHint: "Enter your National ID number in the Personal & Socials tab",
       });
 
@@ -1661,38 +1731,45 @@ export function analyzeApplicationReadiness(input: ReadinessInput): ReadinessRep
         id: "kra_pin",
         category: "documents",
         label: "KRA PIN (Tax Compliance Certificate)",
-        description: "Kenyan government, regulated sector and major corporate portals require KRA PIN for compliance",
-        status: (input.kraPin || "").replace(/\s/g, "").length >= 8 ? "pass" : "warn",
-        detail: input.kraPin ? `KRA PIN: ${input.kraPin}` : "Not provided",
-        isBlocker: false,
+        description: "Required for government, regulated sector and major corporate portals in Kenya",
+        status: (input.kraPin || "").replace(/\s/g, "").length >= 8 ? "pass" : (jobRequiresKraPin ? "fail" : "warn"),
+        detail: input.kraPin ? `KRA PIN: ${input.kraPin}` : `Not provided${jobRequiresKraPin ? " — required by this job" : " (check portal form)"}`,
+        isBlocker: jobRequiresKraPin,
         fixHint: "Enter your KRA PIN in the Personal & Socials tab (format: A0XXXXXXXXK)",
       });
     }
 
-    // Salary expectation check
+    // Salary expectation — only flag as warn/fail if job explicitly requires it
     checks.push({
       id: "salary_expectation",
       category: "documents",
       label: "Salary Expectation / Benchmark",
-      description: "Most portals require salary expectation. A blank field may cause portal validation errors.",
-      status: (input.salaryExpectation || "").trim().length >= 3 ? "pass" : "warn",
-      detail: input.salaryExpectation || "Not specified",
-      isBlocker: false,
-      fixHint: "Enter your salary expectation in the Eligibility tab (e.g. KES 80,000 - 120,000)",
+      description: jobRequiresSalary
+        ? "This job requires salary expectation in the application form"
+        : "Salary expectation is optional — leaving blank may disadvantage your application",
+      status: (input.salaryExpectation || "").trim().length >= 3 ? "pass" : (jobRequiresSalary ? "fail" : "warn"),
+      detail: input.salaryExpectation || (jobRequiresSalary ? "Required — not specified" : "Optional — not specified"),
+      isBlocker: jobRequiresSalary,
+      fixHint: "Enter your salary expectation in the Eligibility tab (e.g. KES 80,000 – 120,000/month)",
     });
 
-    // Notice period check
-    checks.push({
-      id: "notice_period",
-      category: "documents",
-      label: "Notice Period / Availability",
-      description: "Portal forms require notice period for scheduling purposes",
-      status: (input.noticePeriod || "").trim().length >= 3 ? "pass" : "warn",
-      detail: input.noticePeriod || "Not specified",
-      isBlocker: false,
-      fixHint: "Set your notice period in the Eligibility tab (e.g. 'Immediate / 2 Weeks')",
-    });
+    // Notice period — only warn if job mentions it; never a blocker
+    if (jobRequiresNotice || !input.noticePeriod) {
+      checks.push({
+        id: "notice_period",
+        category: "documents",
+        label: "Notice Period / Availability",
+        description: jobRequiresNotice
+          ? "This job's description specifically asks for notice period / earliest start date"
+          : "Portal forms commonly ask for notice period",
+        status: (input.noticePeriod || "").trim().length >= 3 ? "pass" : "warn",
+        detail: input.noticePeriod || "Not specified",
+        isBlocker: false,
+        fixHint: "Set your notice period in the Eligibility tab (e.g. 'Immediate / 2 Weeks')",
+      });
+    }
   }
+
 
   // ─── 7. PROFILE COMPLETENESS CHECKS ────────────────────────────────────────
 

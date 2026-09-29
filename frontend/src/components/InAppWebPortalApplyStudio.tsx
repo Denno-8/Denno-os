@@ -1006,7 +1006,17 @@ ${coverLetter}`;
                         workAuthorization, visaSponsorship, relocationPreference,
                         idNumber, kraPin, eeoGender, eeoDisability, eeoVeteran,
                       };
-                      const allFields = getPortalFormFields(job.source_url || "", candidateProfile);
+                      // Pass job context so optional/required decisions are job-aware
+                      const jobContext = {
+                        title: job.title,
+                        description: job.description,
+                        requirements: job.requirements,
+                        required_skills: job.required_skills,
+                        mode: job.mode,
+                        employment_type: job.employment_type,
+                        level: job.level,
+                      };
+                      const allFields = getPortalFormFields(job.source_url || "", candidateProfile, jobContext);
                       const grouped = groupPortalFieldsBySection(allFields);
 
                       const sectionMeta: Record<string, { label: string; icon: string; color: string }> = {
@@ -1028,7 +1038,9 @@ ${coverLetter}`;
                         setPortalFieldValues(prev => ({ ...prev, [id]: val }));
 
                       const requiredFields = allFields.filter(f => f.required);
+                      const optionalFields = allFields.filter(f => !f.required);
                       const filledRequired = requiredFields.filter(f => getValue(f).trim().length > 0);
+                      const filledOptional = optionalFields.filter(f => getValue(f).trim().length > 0);
                       const completionPct = requiredFields.length > 0
                         ? Math.round((filledRequired.length / requiredFields.length) * 100) : 100;
 
@@ -1039,7 +1051,11 @@ ${coverLetter}`;
                             <div>
                               <div className="font-extrabold text-blue-800 dark:text-blue-200">Portal Application Form — Pre-filled</div>
                               <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
-                                {filledRequired.length}/{requiredFields.length} required fields completed · Copy values into the portal form
+                                {filledRequired.length}/{requiredFields.length} required fields completed
+                                {optionalFields.length > 0 && (
+                                  <> · <span className="text-slate-500">{filledOptional.length}/{optionalFields.length} optional filled</span></>
+                                )}
+                                {" "}· Fields marked <span className="font-black text-rose-500">*</span> are required by this job
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1085,9 +1101,10 @@ ${coverLetter}`;
                                             hasError ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"
                                           }`}>
                                             {field.label}
-                                            {field.required && (
-                                              <span className="text-rose-500 font-black">*</span>
-                                            )}
+                                            {field.required
+                                              ? <span className="text-rose-500 font-black">*</span>
+                                              : <span className="text-[9px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded font-bold uppercase tracking-wider">optional</span>
+                                            }
                                           </label>
                                           {field.type === "file" ? (
                                             <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-black rounded">
@@ -1100,6 +1117,10 @@ ${coverLetter}`;
                                           ) : val ? (
                                             <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded flex items-center gap-1">
                                               <CheckCircle2 size={9} /> FILLED
+                                            </span>
+                                          ) : !field.required ? (
+                                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-400 text-[10px] font-bold rounded">
+                                              SKIP IF BLANK
                                             </span>
                                           ) : null}
                                         </div>
